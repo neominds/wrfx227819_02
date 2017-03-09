@@ -1,0 +1,22 @@
+From a4d2d69711c5656788f1250f41f484734fef373e Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:20 +0900
+Subject: [PATCH 13/29] P17_0015-enable_pcie_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index fe03090..3f80704 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -1380,7 +1380,7 @@
+ 	};
+ 
+ 	pcie1_x2len:pcie1_x2len@0x33E00600 {
+-		status = "auto";
++		#status = "auto";
+ 		compatible = "fujitsu,sysoc-f_pcie_dmx";
+ 		#address-cells = <2>;
+ 		#size-cells = <1>;
+-- 
+1.7.1
+

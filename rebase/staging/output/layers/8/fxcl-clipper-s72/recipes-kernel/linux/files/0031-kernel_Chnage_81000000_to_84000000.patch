@@ -1,0 +1,311 @@
+From 1bfc2949ef6d0e8eec2e9d5f1ef1d7e900c0c47b Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:41 +0000
+Subject: [PATCH 25/34] 0031-kernel_Chnage_81000000_to_84000000
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index a4e4556..5e79a30 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -1084,7 +1084,6 @@
+ 	fdb0: fdb.0 {
+ 		compatible = "fujitsu,f_fdb",
+ 			     "simple-bus";
+-		status = "disabled";
+ 
+ 		id = <0>;
+ 		#stream-id-cells = <2>;
+@@ -1096,7 +1095,8 @@
+ 
+ 		/* fpdlink */
+ 		videophy0: fplink@fb0 {
+-			compatible = "fujitsu,f_fpdl_tx";
++			compatible = "fujitsu,fx_connector";
++			/* compatible = "fujitsu,f_fpdl_tx"; */
+ 			reg = <0 0x37300000 0x8000>;
+ 			selmap = <1>;
+ 			interrupts = <0 144 0x4>; /* lock interrupt */
+@@ -1109,6 +1109,7 @@
+ 
+ 		/* FPDLINK IRIS */
+ 		fb0: iris-fpdlink@fb0 {
++			/* compatible = "fujitsu,fx-fb"; */
+ 			compatible = "fujitsu,f-iris-fb";
+ 			reg = <0 0x37000000 0x8000>;
+ 			interrupts = <0 192 0x4>,
+@@ -1130,7 +1131,8 @@
+ 			id = <0>;
+ 			simple = <0>;
+ 			/* EVB LCD timings / resolution */
+-			mode = "800x480x32bpp";
++			mode = "1024x600x32bpp";
++			/* mode = "800x480x32bpp"; */
+ 			clocks = <&clk_main_1_4>, <&clk_main_3_4>;
+ 			clock-names = "clk1", "clk2";
+ 			power-domains = <&power 2>;
+@@ -1175,12 +1177,12 @@
+ 		iova-start = <0x90000000>;
+ 		iova-range = <0x0 0x50000000>;
+ 		power-domains = <&power 2>;
++		no-1-8-v = <1>;
+ 	};
+ 
+ 	sdhci2: sdio@31410000 {
+ 		compatible = "fujitsu,f_sdh30";
+ 		id = <2>;
+-		//status = "disabled";
+ 		reg = <0 0x31410000 0x1000>;
+ 		interrupts = <0 176 0x4>,
+ 			     <0 177 0x4>;
+@@ -1219,6 +1221,7 @@
+ 
+ 	jpeg: jpeg {
+ 		compatible = "fujitsu,jpegtx";
++		status = "disabled";
+ 
+ 		reg = <0 0x36020000 0x10000>;
+ 		id = <0>;
+@@ -1234,6 +1237,8 @@
+ 	
+ 	mmdecode: mmdecode {
+ 		compatible = "fujitsu,wave320";
++		status = "disabled";
++
+ 		reg = <0 0x36000000 0x20000>;
+ 		id = <0>;
+ 		interrupts = <0 188 0x4>,
+@@ -1249,6 +1254,7 @@
+ 
+ 	i2s4: fsaif@36440000 {
+ 		compatible = "fujitsu,f_saif";
++		status = "disabled";
+ 
+ 		reg = <0 0x36440000 0x1000>;
+ 		interrupts = <0 184 0x4>;
+@@ -1258,6 +1264,7 @@
+ 
+ 	i2s5: fsaif@36450000 {
+ 		compatible = "fujitsu,f_saif";
++		status = "disabled";
+ 
+ 		reg = <0 0x36450000 0x1000>;
+ 		interrupts = <0 185 0x4>;
+@@ -1267,6 +1274,8 @@
+ 
+ 	alsa: mb86s70_wm8973 {
+ 		compatible = "fujitsu,mb86s70_wm8973";
++		status = "disabled";
++
+ 		reg = <0 0 0>; /* fake to stop xx.123 disease */
+ 		channel = <0>;
+ 		ms_mode = <0x4000>; // SND_SOC_DAIFMT_CBS_CFS
+@@ -1279,6 +1288,8 @@
+ 
+ 	pcm0: mb8ac0300_pcm@0 {
+ 		compatible = "fujitsu,mb8ac0300_pcm";
++		status = "disabled";
++
+ 		reg = <0 0 0>; /* fake to stop xx.123 disease */
+ 		/* which hdmac chip we are hooked to */
+ 		hdmac = <1>;
+@@ -1309,7 +1320,7 @@
+ 			/* disable msi */
+ 			/* reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>; */
+ 			/* enable msi */
+-			 reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>, <0 0x320E1200 0x1000>;
++			reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>, <0 0x320E1200 0x1000>;
+ 			interrupts = <0 450 4>, <0 451 4>, <0 452 4>, <0 453 4>,
+ 				<0 454 4>, <0 457 4>, <0 459 4>, <0 460 4>,
+ 				<0 461 4>, <0 462 4>, <0 434 4>;
+@@ -1425,11 +1436,11 @@
+ 			#address-cells = <3>;
+ 			#size-cells = <2>;
+ 			ranges = <0x01000000 0x0 0x00000000 0x0 0x50000000 0 0x08000000
+-					0x02000000 0x0 0x00000000 0x0 0x60000000 0 0x04000000
+-					0x02000000 0x0 0x02000000 0x0 0x64000000 0 0x04000000
+-					0x02000000 0x0 0x0C000000 0x0 0x6C000000 0 0x04000000
++					0x02000000 0x0 0x00000000 0x0 0x60000000 0 0x02000000
++					0x02000000 0x0 0x02000000 0x0 0x62000000 0 0x02000000
++					0x02000000 0x0 0x04000000 0x0 0x64000000 0 0x02000000
++					0x02000000 0x0 0x06000000 0x0 0x66000000 0 0x02000000
+ 					0x03000000 0x0 0x40000000 0x4 0x40000000 0 0x40000000
+-					0x03000000 0x0 0x80000000 0x4 0x80000000 0 0x40000000
+ 					0x00000000 0x0 0xC0000000 0x0 0x32060000 0 0x00010000>;
+ 	
+ 		};
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 63d97ac..39db308 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -18,13 +18,13 @@
+ 
+ 	memory {
+ 		device_type = "memory";
+-		reg = <0 0x81000000 0x7f000000
+-		       0x8 0x80000000 0x60000000>;
+-		contigmem = <0x8 0xe0000000 0x20000000>;
++		reg = <0 0x84000000 0x3c000000
++			0x8 0x80000000 0x80000000>;
++		contigmem = <0x0 0xc0000000 0x40000000>;
+ 	};
+ 
+ 	chosen {
+-		bootargs = "shm_offset=2048 console=ttyAMA2,38400 root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
++		bootargs = "shm_offset=2048 console=ttyAMA2,38400 root=/dev/mmcblk0p1 rootwait rw pcie_ports=native ";
+ 
+ 		linux,initrd-start = <0xc0000000>;
+ 		linux,initrd-end =   <0xc0800000>;
+@@ -189,87 +189,7 @@
+ 				reg = <0x7c0000 0x40000>;
+ 			};
+ 
+-		    };
+-	};
+-
+-	gpio-flash@xcs4-gpio {
+-		status = "disabled";
+-		compatible = "gpio-control-nor";
+-		reg = <0 0x2a4d0000 0x10000>; /* prmux */
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-		bank-width = <2>;
+-		device-width = <2>;
+-		power-domains = <&power 1>;
+-
+-		gpios = <&gpio0 30 0>,	/* rdy PD30 */
+-			 <&gpio0 8 0>, 	/* nce */
+-			 <&gpio0 10 0>, 	/* noe */
+-			 <&gpio0 13 0>, 	/* nwe */
+-
+-			/* 16 data */
+-
+-			<&gpio0 14 0>,
+-			<&gpio0 15 0>,
+-			<&gpio0 16 0>,
+-			<&gpio0 17 0>,
+-			<&gpio0 18 0>,
+-			<&gpio0 19 0>,
+-			<&gpio0 20 0>,
+-			<&gpio0 21 0>,
+-			<&gpio0 22 0>,
+-			<&gpio0 23 0>,
+-			<&gpio0 24 0>,
+-			<&gpio0 25 0>,
+-			<&gpio0 26 0>,
+-			<&gpio0 27 0>,
+-			<&gpio0 28 0>,
+-			<&gpio0 29 0>,
+-
+-			/* as many address as we have (22) */
+-
+-			<&gpio1 0 0>,
+-			<&gpio1 1 0>,
+-			<&gpio1 2 0>,
+-			<&gpio1 3 0>,
+-			<&gpio1 4 0>,
+-			<&gpio1 5 0>,
+-			<&gpio1 6 0>,
+-			<&gpio1 7 0>,
+-			<&gpio1 8 0>,
+-			<&gpio1 9 0>,
+-			<&gpio1 10 0>,
+-			<&gpio1 11 0>,
+-			<&gpio1 12 0>,
+-			<&gpio1 13 0>,
+-			<&gpio1 14 0>,
+-			<&gpio1 15 0>,
+-			<&gpio1 16 0>,
+-			<&gpio1 17 0>,
+-			<&gpio1 18 0>,
+-			<&gpio1 19 0>,
+-			<&gpio1 20 0>,
+-			<&gpio1 21 0>;
+-
+-		firmware@0 { /* 2MByte firmware region */
+-			label = "firmware";
+-			reg = <0 0x200000>;
+-		};
+-
+-		romfs@200000 { /* only 8MByte is addressable by gpio */
+-			label = "romfs";
+-			reg = <0x200000 0x5e0000>;
+ 		};
+-		
+-	};
+-
+-	flash@XSC4 {
+-		status = "disabled";
+-		compatible = "spansion,s29gl128p", "cfi-flash";
+-		reg = <0 0x40000000 0x01000000>;
+-		bank-width = <2>;
+-		device-width = <2>;
+-		power-domains = <&power 1>;
+ 	};
+ 
+ 	/* Enable only UART0 of S73-evb */
+diff --git a/arch/arm/include/asm/sparsemem.h b/arch/arm/include/asm/sparsemem.h
+index a6da462..010d387 100644
+--- a/arch/arm/include/asm/sparsemem.h
++++ b/arch/arm/include/asm/sparsemem.h
+@@ -19,7 +19,7 @@
+  */
+ #if !defined(SECTION_SIZE_BITS) || !defined(MAX_PHYSMEM_BITS)
+ #define MAX_PHYSMEM_BITS       36
+-#define SECTION_SIZE_BITS      28
++#define SECTION_SIZE_BITS      29
+ #endif
+ 
+ #endif
+diff --git a/arch/arm/mach-mb86s70/Kconfig b/arch/arm/mach-mb86s70/Kconfig
+index 3235f5f..7b1accf 100644
+--- a/arch/arm/mach-mb86s70/Kconfig
++++ b/arch/arm/mach-mb86s70/Kconfig
+@@ -43,6 +43,7 @@ config ARCH_MB86S70_SPARSEMEMORY
+ 	bool "Sparse Memory"
+ 	select ARCH_SELECT_MEMORY_MODEL
+ 	select ARCH_SPARSEMEM_ENABLE
++	select ARCH_HAS_HOLES_MEMORYMODEL
+ 
+ endchoice
+ endif
+diff --git a/arch/arm/mach-mb86s70/Makefile.boot b/arch/arm/mach-mb86s70/Makefile.boot
+index df4e08b..68234ba 100644
+--- a/arch/arm/mach-mb86s70/Makefile.boot
++++ b/arch/arm/mach-mb86s70/Makefile.boot
+@@ -1 +1 @@
+-zreladdr-y	+= 0x81008000
++zreladdr-y	+= 0x84008000
+diff --git a/arch/arm/mach-mb86s70/sleep.S b/arch/arm/mach-mb86s70/sleep.S
+index d91cd72..44e3ab2 100644
+--- a/arch/arm/mach-mb86s70/sleep.S
++++ b/arch/arm/mach-mb86s70/sleep.S
+@@ -29,7 +29,7 @@
+ 
+ #define MB86S70_WFICOLOR_PHYS (MB86S70_ISRAM_PHYS + WFI_COLOR_REG_OFFSET)
+ #define PHYS_TRMP_ADDR	(MB86S70_TRAMPOLINE_PHYS + SEC_RSTADDR_OFF)
+-#define OFFSET_FIX	(PAGE_OFFSET - 0x81000000 /* PHYS_OFFSET */)
++#define OFFSET_FIX	(PAGE_OFFSET - 0x84000000 /* PHYS_OFFSET */)
+ .arch_extension sec
+ 
+ ENTRY(mb86s70_primary_reboot)
+diff --git a/arch/arm/mm/fault.c b/arch/arm/mm/fault.c
+index b3a4250..4f5cdaf 100644
+--- a/arch/arm/mm/fault.c
++++ b/arch/arm/mm/fault.c
+@@ -568,6 +568,12 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+ 	if (!inf->fn(addr, fsr & ~FSR_LNX_PF, regs))
+ 		return;
+ 
++	if (fsr == 0x211 && addr == 0) {
++		printk(KERN_ALERT "IGNORE: Unhandled fault: %s (0x%03x) at 0x%08lx\n",
++			inf->name, fsr, addr);
++		return;
++	}
++
+ 	printk(KERN_ALERT "Unhandled fault: %s (0x%03x) at 0x%08lx\n",
+ 		inf->name, fsr, addr);
+ 
+-- 
+1.7.9.5
+

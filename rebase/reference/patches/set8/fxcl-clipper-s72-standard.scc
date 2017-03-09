@@ -1,0 +1,15 @@
+define KMACHINE fxcl-clipper-s72
+define KTYPE standard
+define KARCH arm
+
+kconf hardware fxcl-clipper-s72.cfg
+
+patch 0001-S72-common-base.patch
+patch 0001-S72-standard-base.patch
+patch 0002-fix-build-error.patch
+patch 0003-New-build-error.patch
+patch 0004-implement-of_i2c.patch
+patch 0005-workaround-kmap.patch
+#patch 0039-standard_random_RCPL0027Update.patch
+
+include fxcl-clipper-s72.scc

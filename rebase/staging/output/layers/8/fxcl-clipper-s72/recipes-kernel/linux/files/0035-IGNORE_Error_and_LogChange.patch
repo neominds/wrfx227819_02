@@ -1,0 +1,54 @@
+From 1f3acb85f6068eb6e2f1c1c3f8f5236d5bb8e200 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:44 +0000
+Subject: [PATCH 29/34] 0035-IGNORE_Error_and_LogChange
+
+
+diff --git a/arch/arm/boot/compressed/atags_to_fdt.c b/arch/arm/boot/compressed/atags_to_fdt.c
+index 61499ea..e30b01b 100644
+--- a/arch/arm/boot/compressed/atags_to_fdt.c
++++ b/arch/arm/boot/compressed/atags_to_fdt.c
+@@ -194,9 +194,7 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
+ 	res[0] = replace_startup(fdt, total_space);
+ 	res[1] = replace_enc(fdt, total_space);
+ 
+-	if( res[0] ==1 || res[1] ==1) {
+-		return 1;
+-	}
++	return 1;
+ #endif	/* CONFIG_ARCH_MB86S70 */
+ 	/* if we get a DTB here we're done already */
+ 	if (*(u32 *)atag_list == fdt32_to_cpu(FDT_MAGIC))
+diff --git a/arch/arm/mach-mb86s70/hibernate_setup.c b/arch/arm/mach-mb86s70/hibernate_setup.c
+index 2f97ca8..a31a5eb 100644
+--- a/arch/arm/mach-mb86s70/hibernate_setup.c
++++ b/arch/arm/mach-mb86s70/hibernate_setup.c
+@@ -179,9 +179,10 @@ static int mb86s70_hibernate_enc_setup(void)
+ 	}
+ 	if ( i == 16 ) {
+ 		enc_flag=0;
+-		printk(KERN_ERR "++%s: key not found\n",__func__);
++		printk(KERN_ERR "LZO Encryption OFF\n");
+ 		return 0;
+ 	}
++	printk(KERN_ERR "LZO Encryption ON\n");
+ 	enc_flag=1;
+ #ifdef	HIBERNATION_SETUP_TRACE
+ printk(KERN_ERR "*****%s: key=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",__func__,
+diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
+index 8a5175f..c492c6e 100644
+--- a/kernel/power/hibernate.c
++++ b/kernel/power/hibernate.c
+@@ -1096,8 +1096,7 @@ printk(KERN_ERR "++%s: Start\n",__func__);
+ 		printk(KERN_ERR "atag_parse(set_panbug) error\n");
+ 	}
+ 
+-#if 1	/* for debug */
+-printk(KERN_ERR "++%s:\n",__func__);
++#ifdef  HIBERNATE_TRACE
+ printk(KERN_ERR "++%s: startup=%s resume_delay=%d\n",__func__, resume_file, resume_delay);
+ printk(KERN_ERR "++%s: enckey=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",__func__,
+ 		enckey[0],enckey[1],enckey[2],enckey[3],enckey[4],enckey[5],enckey[6],enckey[7],
+-- 
+1.7.9.5
+

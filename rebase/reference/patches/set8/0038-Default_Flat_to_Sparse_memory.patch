@@ -1,0 +1,57 @@
+From f42aa0778df6b8f7bf228ca30760bc4440597994 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Fri, 15 Apr 2016 11:42:36 +0900
+Subject: [PATCH 1/1] Default_Flat_to_Sparse_memory
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ arch/arm/Kconfig              |    2 +-
+ arch/arm/mach-mb86s70/Kconfig |   17 ++---------------
+ 2 files changed, 3 insertions(+), 16 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index e914cfa..feff9fa 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1106,7 +1106,7 @@ source arch/arm/mm/Kconfig
+ config ARM_NR_BANKS
+ 	int
+ 	default 16 if ARCH_EP93XX
+-	default 16 if ARCH_MB86S70_SPARSEMEMORY
++	default 16 if ARCH_MB86S70
+ 	default 8
+ 
+ config IWMMXT
+diff --git a/arch/arm/mach-mb86s70/Kconfig b/arch/arm/mach-mb86s70/Kconfig
+index 7b1accf..3cdd216 100755
+--- a/arch/arm/mach-mb86s70/Kconfig
++++ b/arch/arm/mach-mb86s70/Kconfig
+@@ -28,22 +28,9 @@ config ARCH_MB86S70
+ 	select PM_GENERIC_DOMAINS if PM
+ 	select LOCAL_TIMERS
+ 	select ARCH_DMA_ADDR_T_64BIT
+-	help
+-	  Support for Fujitsu Semiconductor's systems.
+-
+-if ARCH_MB86S70
+-choice
+-	prompt "Memory Model"
+-	default ARCH_MB86S70_FLATMEMORY
+-
+-config ARCH_MB86S70_FLATMEMORY
+-	bool "Flat Memory"
+-
+-config ARCH_MB86S70_SPARSEMEMORY
+-	bool "Sparse Memory"
+ 	select ARCH_SELECT_MEMORY_MODEL
+ 	select ARCH_SPARSEMEM_ENABLE
+ 	select ARCH_HAS_HOLES_MEMORYMODEL
++	help
++	  Support for Fujitsu Semiconductor's systems.
+ 
+-endchoice
+-endif
+-- 
+1.7.1
+

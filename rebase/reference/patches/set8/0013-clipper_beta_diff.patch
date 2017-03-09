@@ -1,0 +1,1328 @@
+From 24be4f804a15e5ff2cad3b57f54b1efd154846eb Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:19 +0900
+Subject: [PATCH 12/29] P15_0013-clipper_beta_diff_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index cb09a6f..fe03090 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -25,7 +25,7 @@
+ 
+ 		cluster0: cluster@0 { /* A15s */
+ 			reg = <0>;
+-			freqs = <1200000000>;
++			freqs = <1600000000>;
+ 			cores {
+ 				#address-cells = <1>;
+ 				#size-cells = <0>;
+@@ -42,7 +42,7 @@
+ 
+ 		cluster1: cluster@1 {
+ 			reg = <1>;
+-			freqs = <800000000>;
++			freqs = <825000000>;
+ 			cores {
+ 				#address-cells = <1>;
+ 				#size-cells = <0>;
+@@ -67,12 +67,13 @@
+ 			reg = <0>;
+ 			cluster = <&cluster0>;
+ 			core = <&core0>;
++			clock-frequency = <1200000000>;
+ 			cci-control-port = <&cci_control4>;
+-			clock-frequency = <1600000000>;
+ 			operating-points = <
++				/* kHz    uV */
+ 				1600000	1020000
+ 			>;
+-			clock-latency = <1000000>;
++			clock-latency = <100000>;
+ 		};
+ 
+ 		cpu1: cpu@1 {
+@@ -81,12 +82,13 @@
+ 			reg = <1>;
+ 			cluster = <&cluster0>;
+ 			core = <&core1>;
++			clock-frequency = <1200000000>;
+ 			cci-control-port = <&cci_control4>;
+-			clock-frequency = <1600000000>;
+ 			operating-points = <
++				/* kHz    uV */
+ 				1600000	1020000
+ 			>;
+-			clock-latency = <1000000>;
++			clock-latency = <100000>;
+ 		};
+ 
+ 		cpu2: cpu@2 {
+@@ -95,12 +97,13 @@
+ 			reg = <0x100>;
+ 			cluster = <&cluster1>;
+ 			core = <&core2>;
++			clock-frequency = <825000000>;
+ 			cci-control-port = <&cci_control3>;
+-			clock-frequency = <800000000>;
+ 			operating-points = <
+-				800000 1020000
++				/* kHz    uV */
++				 825000  1020000
+ 			>;
+-			clock-latency = <1000000>;
++			clock-latency = <100000>;
+ 		};
+ 
+ 		cpu3: cpu@3 {
+@@ -109,12 +112,13 @@
+ 			reg = <0x101>;
+ 			cluster = <&cluster1>;
+ 			core = <&core3>;
++			clock-frequency = <825000000>;
+ 			cci-control-port = <&cci_control3>;
+-			clock-frequency = <800000000>;
+ 			operating-points = <
+-				800000 1020000
++				/* kHz    uV */
++				 825000  1020000
+ 			>;
+-			clock-latency = <1000000>;
++			clock-latency = <100000>;
+ 		};
+ 	};
+ 
+@@ -131,7 +135,6 @@
+ 		ca15-cpu0-thermal {
+ 			polling-delay-passive = <500>;
+ 			polling-delay = <1000>;
+-
+ 			thermal-sensors = <&scb_sensor 0x0>;
+ 
+ 		};
+@@ -139,7 +142,6 @@
+ 		ca15-cpu1-thermal {
+ 			polling-delay-passive = <500>;
+ 			polling-delay = <1000>;
+-
+ 			thermal-sensors = <&scb_sensor 0x1>;
+ 
+ 		};
+@@ -147,7 +149,6 @@
+ 		ca7-cpu0-thermal {
+ 			polling-delay-passive = <500>;
+ 			polling-delay = <1000>;
+-
+ 			thermal-sensors = <&scb_sensor 0x100>;
+ 
+ 		};
+@@ -155,7 +156,6 @@
+ 		ca7-cpu1-thermal {
+ 			polling-delay-passive = <500>;
+ 			polling-delay = <1000>;
+-
+ 			thermal-sensors = <&scb_sensor 0x101>;
+ 
+ 		};
+@@ -331,6 +331,13 @@
+ 			domain = <2>;
+ 			port = <8>;
+ 		};
++		clk_alw_5_8: clk_alw_5_8 {
++			#clock-cells = <0>;
++			compatible = "mb86s70,crg11_gate";
++			cntrlr = <0>;
++			domain = <5>;
++			port = <8>;
++		};
+ 		clk_alw_6_8: clk_alw_6_8 {
+ 			#clock-cells = <0>;
+ 			compatible = "mb86s70,crg11_gate";
+@@ -709,6 +716,13 @@
+ 			domain = <1>;
+ 			port = <0>;
+ 		};
++		clk_fpdlink_1_8: clk_fpdlink_1_8 {
++			#clock-cells = <0>;
++			compatible = "mb86s70,crg11_gate";
++			cntrlr = <5>;
++			domain = <1>;
++			port = <8>;
++		};
+ 	};
+ 
+ 	power: power_domain {
+@@ -952,6 +966,7 @@
+ 			clock-frequency = <7813000>;
+ 			clocks = <&clk_alw_f_8>;
+ 			clock-names = "apb_pclk";
++			dma-names = "tx", "rx";
+ 			power-domains = <&power 1>;
+ 		};
+ 	
+@@ -964,6 +979,7 @@
+ 			clock-frequency = <7813000>;
+ 			clocks = <&clk_alw_f_8>;
+ 			clock-names = "apb_pclk";
++			dma-names = "tx", "rx";
+ 			power-domains = <&power 1>;
+ 		};
+ 	
+@@ -976,6 +992,7 @@
+ 			clock-frequency = <7813000>;
+ 			clocks = <&clk_alw_f_8>;
+ 			clock-names = "apb_pclk";
++			dma-names = "tx", "rx";
+ 			power-domains = <&power 1>;
+ 		};
+ 	};
+@@ -1153,7 +1170,7 @@
+ 		reg = <0 0x37800000 0x10000>;
+ 		#global-interrupts = <1>;
+ 		interrupts = <0 365 4>, <0 364 4>;
+-		mmu-masters = <&sdhci1 0 1>, <&fdb0 0 1>, <&jpeg 0 1>, <&alsa 0 1>;
++		mmu-masters = <&sdhci1 0 1>, <&fdb0 0 1>, <&jpeg 0 1>, <&alsa 0 1>, <&mmdecode 0 1>;
+ 		stream-ids = <0>, <0>, <0>;
+ 		power-domains = <&power 2>;
+ 	};
+@@ -1178,7 +1195,7 @@
+ 			selmap = <1>;
+ 			interrupts = <0 144 0x4>; /* lock interrupt */
+ 			sources = <1>; /* bitfield of fbs can be driven by */
+-			clocks = <&clk_fpdlink_0_0>, <&clk_fpdlink_1_0>, <&clk_main_3_0>, <&clk_main_5_0>;
++			clocks = <&clk_fpdlink_0_0>, <&clk_fpdlink_1_8>, <&clk_main_3_0>, <&clk_main_5_0>;
+ 			clock-names = "pllclk", "dpiclk", "pclk", "clk4";
+ 			power-domains = <&power 17>;
+ 			simple-bind = <&fb0>;
+@@ -1208,9 +1225,9 @@
+ 			simple = <0>;
+ 			/* EVB LCD timings / resolution */
+ 			mode = "800x480x32bpp";
+-			clocks = <&clk_fpdlink_0_0>, <&clk_main_a_0>, <&clk_main_b_0>;
+-			clock-names = "clk1", "clk2", "clk3";
+-			power-domains = <&power 17>;
++			clocks = <&clk_main_1_4>, <&clk_main_3_4>;
++			clock-names = "clk1", "clk2";
++			power-domains = <&power 2>;
+ 		};
+ 
+ 		fdbdrm0: fdbdrm.0 {
+@@ -1230,7 +1247,7 @@
+ 		interrupts = <0 164 0x4>,
+ 			     <0 165 0x4>;
+ 		resume-detect-retry;
+-		mmc-caps2 = <0x20>;
++		mmc-caps2 = <0x30>;
+ 		vendor-hs200 = <0x01000000>;
+ 		bus-width = <8>;
+ 		/* clocks = <&clk_alw_c_0>, <&clk_alw_b_0>; */
+@@ -1259,7 +1276,7 @@
+ 		interrupts = <0 176 0x4>,
+ 			     <0 177 0x4>;
+ 		resume-detect-retry;
+-		no-dma;
++		//no-dma;
+ 		/* clocks = <&clk_main_c_0>, <&clk_main_d_0>; */
+ 		/* clock-names = "sd_sd4clk", "sd_bclk"; */
+ 		//#stream-id-cells = <2>;
+@@ -1363,6 +1380,7 @@
+ 	};
+ 
+ 	pcie1_x2len:pcie1_x2len@0x33E00600 {
++		status = "auto";
+ 		compatible = "fujitsu,sysoc-f_pcie_dmx";
+ 		#address-cells = <2>;
+ 		#size-cells = <1>;
+@@ -1392,9 +1410,9 @@
+ 			int_type = <0>;
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+ 			msi-multi = <0>;
+-			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_2>;
+-			clock-names = "pcie2_aclk","pcie2_pclk","pcie2_aclk_hsiob";
+-			clock_num = <3>;
++			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_2>, <&clk_alw_7_7>;
++			clock-names = "pcie_aclk","pcie_pclk","pcie1_aclk_x2","pcie1_hclk_x2";
++			clock_num = <4>;
+ 			link_spd = <1>; /* 0=>2.5GT/s, 1=>2.5GT/s and 5.0GT/s */
+ 			link_wid = <4>; /* 1=> max land x1, 4=> max land x4 */
+ 			#address-cells = <3>;
+@@ -1417,7 +1435,7 @@
+ 		ranges;
+ 		reg = <0 0x33E00100 0x64>,<0 0 0>, <0 0x33F00000 0x60>;
+ 		clocks = <&clk_alw_e_3>;
+-		clock-names = "pcie1_hclk_i";
++		clock-names = "pcie1_pclk_X4";
+ 		clock_num = <1>;
+ 		#stream-id-cells = <2>;
+ 		iova-start = <0x00000000>;
+@@ -1442,7 +1460,7 @@
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+ 			msi-multi = <0>;
+ 			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_2>,<&clk_alw_7_3>;
+-			clock-names = "pcie1_aclk","pcie1_pclk","pcie1_aclk_hsiob","pcie1_hclk_hsiob";
++			clock-names = "pcie_aclk","pcie_pclk","pcie1_aclk_x4","pcie1_hclk_x4";
+ 			clock_num = <4>;
+ 			link_spd = <1>; /* 0=>2.5GT/s, 1=>2.5GT/s and 5.0GT/s */
+ 			link_wid = <4>; /* 1=> max land x1, 4=> max land x4 */
+@@ -1466,7 +1484,7 @@
+ 		ranges;
+ 		reg = <0 0x33E00000 0x64>,<0 0 0>, <0 0x33F00000 0x60>;
+ 		clocks = <&clk_alw_e_2>;
+-		clock-names = "pcie0_hclk_i";
++		clock-names = "pcie0_pclk";
+ 		clock_num = <1>;
+ 		#stream-id-cells = <2>;
+ 		iova-start = <0x00000000>;
+@@ -1490,8 +1508,8 @@
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+ 			msi-multi = <0>;
+ 			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_1>,<&clk_alw_7_0>;
+-			clock-names = "pcie0_aclk","pcie0_pclk","pcie0_aclk_hsiob","pcie0_hclk_hsiob";
+-			clock_num = <2>;
++			clock-names = "pcie0_aclk","pcie_pclk","pcie0_aclk","pcie0_hclk_x4";
++			clock_num = <4>;
+ 			link_spd = <1>; /* 0=>2.5GT/s, 1=>2.5GT/s and 5.0GT/s */
+ 			link_wid = <4>; /* 1=> max land x1, 4=> max land x4 */
+ 			/* ranges = <phys.hi phys.mid phys.low cpu range */
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 2bc7821..e49258d 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -9,6 +9,7 @@
+ /dts-v1/;
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/thermal/thermal.h>
++
+ #include "mb86s72.dtsi"
+ 
+ / {
+@@ -21,7 +22,7 @@
+ 	};
+ 
+ 	chosen {
+-		bootargs = "no_console_suspend shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk1p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
++		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk1p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
+ 
+ 		linux,initrd-start = <0xc0000000>;
+ 		linux,initrd-end =   <0xc0800000>;
+@@ -34,6 +35,7 @@
+ 		#gpio-cells = <2>;
+ 		clocks = <&clk_alw_2_1>;
+ 		base = <0>;
++		power-domains = <&power 1>;
+ 	};
+ 	gpio1: mb86s70_gpio1 {
+ 		compatible = "fujitsu,mb86s70-gpio";
+@@ -42,6 +44,7 @@
+ 		#gpio-cells = <2>;
+ 		clocks = <&clk_alw_2_1>;
+ 		base = <32>;
++		power-domains = <&power 1>;
+        };
+ 
+ 	videomodes@0 {
+@@ -106,7 +109,7 @@
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+ 		clock-frequency = <100000>;
+-		clocks = <&clk_alw_2_1>;
++		clocks = <&clk_alw_5_8>;
+ 		power-domains = <&power 1>;
+ 
+ 		wm8973: wm8973@1a {
+@@ -143,7 +146,7 @@
+ 		interrupts = <0 313 0x4>;
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-		clocks = <&clk_alw_2_1>;
++		clocks = <&clk_alw_5_8>;
+ 		clock-frequency = <100000>;
+ 		power-domains = <&power 1>;
+ 
+@@ -190,6 +193,8 @@
+ 		flash@0 {
+ 			compatible = "n25q512a";
+ 			spi-max-frequency = <31250000>;
++			spi-rx-bus-width = <4>;
++			spi-tx-bus-width = <4>;
+ 			reg = <0>;
+ 
+ 			#address-cells = <1>;
+@@ -205,6 +210,8 @@
+ 		flash@1 {
+ 			compatible = "n25q512a";
+ 			spi-max-frequency = <31250000>;
++			spi-rx-bus-width = <4>;
++                        spi-tx-bus-width = <4>;
+ 			reg = <1>;
+ 
+ 			#address-cells = <1>;
+diff --git a/arch/arm/mach-mb86s70/mcpm.c b/arch/arm/mach-mb86s70/mcpm.c
+index 74902df..dd1abb7 100644
+--- a/arch/arm/mach-mb86s70/mcpm.c
++++ b/arch/arm/mach-mb86s70/mcpm.c
+@@ -261,12 +261,10 @@ static int mb86s70_die(unsigned long arg)
+ 
+ 	if (use_retention_mode) {
+ 		__mcpm_cpu_going_down(cpu, cluster);
+-		local_irq_disable();
+ 		arch_spin_lock(&mb86s70_pm_lock);
+ 		gic_cpu_if_down();
+ 		__mcpm_outbound_enter_critical(cpu, cluster);
+ 		arch_spin_unlock(&mb86s70_pm_lock);
+-		local_irq_enable();
+ 
+ 		v7_exit_coherency_flush(all);
+ 		cci_disable_port_by_cpu(mpidr);
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 15887c3..3ec8986 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -241,7 +241,7 @@ static int do_xfer(void)
+ 	spin_unlock_irqrestore(&fsm_lock, flags);
+ 
+ 	/* Prefer mailbox API */
+-	if (!mhu_chan) {
++	if ((!mhu_chan) && (!irqs_disabled())) {
+ 		mhu_cl.tx_block = true;
+ 		mhu_cl.knows_txdone = true;
+ 		mhu_cl.rxcb = mhu_recv;
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index f4e1204..a8ad42d 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -26,6 +26,8 @@
+ #include <linux/platform_device.h>
+ #include <linux/spinlock.h>
+ #include <linux/slab.h>
++#include <linux/pm_runtime.h>
++#include <linux/debugfs.h>
+ 
+ /*
+  * Only first 8bits of a register correspond to each pin,
+@@ -42,6 +44,9 @@ struct mb86s70_gpio_chip {
+ 	void __iomem *base;
+ 	struct clk *clk;
+ 	spinlock_t lock;
++	u32 *pdr_reg_save;
++	u32 *ddr_reg_save;
++	u32 *pfr_reg_save;
+ };
+ 
+ static inline struct mb86s70_gpio_chip *chip_to_mb86s70(struct gpio_chip *gc)
+@@ -148,19 +153,77 @@ static void mb86s70_gpio_set(struct gpio_chip *gc, unsigned gpio, int value)
+ 	spin_unlock_irqrestore(&gchip->lock, flags);
+ }
+ 
++#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_FS)
++int gpio_dbg_open(struct inode *inode, struct file *file)
++{
++	struct mb86s70_gpio_chip *gchip = inode->i_private;
++
++	if (!gchip) {
++		pr_err("%s gchip null\n", __func__);
++		return -EINVAL;
++	}
++	file->private_data = gchip;
++	return 0;
++}
++
++ssize_t gpio_dbg_read(struct file *file, char __user *user_buf,
++	size_t count, loff_t *ppos)
++{
++	struct mb86s70_gpio_chip *gchip;
++	struct device *dev;
++	ssize_t ret = 0;
++	u32 id = 0, cnt = 0, ngpio_gp;
++
++	gchip = file->private_data;
++	if (!gchip) {
++		pr_err("%s gchip null\n", __func__);
++		return -EINVAL;
++	}
++
++	dev = gchip->gc.dev;
++	ngpio_gp = gchip->gc.ngpio / 8;
++
++	while (cnt < ngpio_gp) {
++		dev_info(dev,
++			"PDR(0x%x):0x%x\n", cnt * 0x04, readb(gchip->base + PDR(id)));
++		dev_info(dev,
++			"DDR(0x%x):0x%x\n", cnt * 0x04, readb(gchip->base + DDR(id)));
++		dev_info(dev,
++			"PFR(0x%x):0x%x\n", cnt * 0x04, readb(gchip->base + PFR(id)));
++		id = id + 8;
++		cnt++;
++	};
++
++	return ret;
++}
++#endif
++
++static const struct file_operations gpio_dbg_fops = {
++	.open = gpio_dbg_open,
++	.read = gpio_dbg_read,
++};
++
+ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ {
+ 	struct mb86s70_gpio_chip *gchip;
+ 	struct resource *res;
+ 	int ret, base;
++	struct dentry *dbg_dir;
++	struct dentry *dbg_file;
+ 
+ 	gchip = devm_kzalloc(&pdev->dev, sizeof(*gchip), GFP_KERNEL);
+ 	if (gchip == NULL)
+ 		return -ENOMEM;
+ 
++#ifdef CONFIG_PM_RUNTIME
++	pm_runtime_enable(&pdev->dev);
++	pm_runtime_get_sync(&pdev->dev);
++#endif
++
+ 	platform_set_drvdata(pdev, gchip);
+ 
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++
+ 	gchip->base = devm_ioremap_resource(&pdev->dev, res);
+ 	if (IS_ERR(gchip->base))
+ 		return PTR_ERR(gchip->base);
+@@ -191,6 +254,13 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 	gchip->gc.dev = &pdev->dev;
+ 	gchip->gc.base = base;
+ 
++	gchip->pdr_reg_save = devm_kzalloc(&pdev->dev,
++		sizeof(u32) * gchip->gc.ngpio / 8, GFP_KERNEL);
++	gchip->ddr_reg_save = devm_kzalloc(&pdev->dev,
++		sizeof(u32) * gchip->gc.ngpio / 8, GFP_KERNEL);
++	gchip->pfr_reg_save = devm_kzalloc(&pdev->dev,
++		sizeof(u32) * gchip->gc.ngpio / 8, GFP_KERNEL);
++	
+ 	platform_set_drvdata(pdev, gchip);
+ 
+ 	ret = gpiochip_add(&gchip->gc);
+@@ -199,6 +269,21 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 		clk_disable_unprepare(gchip->clk);
+ 	}
+ 
++#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_FS)
++	dbg_dir = debugfs_create_dir(dev_name(&pdev->dev), NULL);
++	if (!dbg_dir) {
++		dev_err(&pdev->dev, "debugfs_create_dir fail\n");
++		return -ENOMEM;
++	}
++
++	dbg_file = debugfs_create_file("mb86s7x_gpio_dbg",
++		S_IWUGO, dbg_dir, gchip, &gpio_dbg_fops);
++	if (!dbg_file) {
++		dev_err(&pdev->dev, "debugfs_create_file fail\n");
++		return -ENOMEM;
++	}
++#endif
++
+ 	return ret;
+ }
+ 
+@@ -210,11 +295,84 @@ static int mb86s70_gpio_remove(struct platform_device *pdev)
+ 	ret = gpiochip_remove(&gchip->gc);
+ 	if (ret)
+ 		return ret;
++
++	kfree(gchip->pdr_reg_save);
++	kfree(gchip->ddr_reg_save);
++	kfree(gchip->pfr_reg_save);
++
+ 	clk_disable_unprepare(gchip->clk);
++#ifdef CONFIG_PM_RUNTIME
++	pm_runtime_put_sync(&pdev->dev);
++	pm_runtime_disable(&pdev->dev);
++#endif
++	return 0;
++}
+ 
++#ifdef CONFIG_PM
++static int mb86s70_gpio_pm_suspend(struct device *dev)
++{
++	struct mb86s70_gpio_chip *gchip = dev_get_drvdata(dev);
++	u32 id = 0, cnt = 0, ngpio_gp;
++
++	if (!gchip)
++		return 0;
++
++	/* 8 pin of group */
++	ngpio_gp = gchip->gc.ngpio / 8;
++
++	while (cnt < ngpio_gp) {
++		gchip->pdr_reg_save[cnt] = readb(gchip->base + PDR(id));
++		gchip->ddr_reg_save[cnt] = readb(gchip->base + DDR(id));
++		gchip->pfr_reg_save[cnt] = readb(gchip->base + PFR(id));
++		id = id + 8;
++		cnt++;
++	};
++	clk_disable_unprepare(gchip->clk);
+ 	return 0;
+ }
+ 
++static int mb86s70_gpio_pm_resume(struct device *dev)
++{
++	struct mb86s70_gpio_chip *gchip = dev_get_drvdata(dev);
++	u32 id = 0, cnt = 0, ngpio_gp;
++
++	if (!gchip)
++		return 0;
++
++	ngpio_gp = gchip->gc.ngpio / 8;
++	clk_prepare_enable(gchip->clk);
++
++	while (cnt < ngpio_gp) {
++		writeb(gchip->pfr_reg_save[cnt], gchip->base + PFR(id));
++		writeb(gchip->pdr_reg_save[cnt], gchip->base + PDR(id));
++		writeb(gchip->ddr_reg_save[cnt], gchip->base + DDR(id));
++		id = id + 8;
++		cnt++;
++	};
++	return 0;
++}
++
++static int mb86s70_gpio_runtime_suspend(struct device *dev)
++{
++	return mb86s70_gpio_pm_suspend(dev);
++}
++
++static int mb86s70_gpio_runtime_resume(struct device *dev)
++{
++	return mb86s70_gpio_pm_resume(dev);
++}
++
++static const struct dev_pm_ops mb86s70_gpio_pm_ops = {
++	.resume = &mb86s70_gpio_pm_resume,
++	.suspend = &mb86s70_gpio_pm_suspend,
++#ifdef CONFIG_PM_RUNTIME
++	SET_RUNTIME_PM_OPS(
++	mb86s70_gpio_runtime_suspend,
++	mb86s70_gpio_runtime_resume, NULL)
++#endif
++};
++#endif
++
+ static const struct of_device_id mb86s70_gpio_dt_ids[] = {
+ 	{ .compatible = "fujitsu,mb86s70-gpio" },
+ 	{ /* sentinel */ }
+@@ -225,6 +383,9 @@ static struct platform_driver mb86s70_gpio_driver = {
+ 	.driver = {
+ 		.name = "mb86s70-gpio",
+ 		.of_match_table = mb86s70_gpio_dt_ids,
++#ifdef CONFIG_PM
++		.pm = &mb86s70_gpio_pm_ops,
++#endif
+ 	},
+ 	.probe = mb86s70_gpio_probe,
+ 	.remove = mb86s70_gpio_remove,
+diff --git a/drivers/mmc/host/sdhci.c b/drivers/mmc/host/sdhci.c
+index 6c06550..842a81a 100755
+--- a/drivers/mmc/host/sdhci.c
++++ b/drivers/mmc/host/sdhci.c
+@@ -1885,12 +1885,13 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 	unsigned long timeout;
+ 	int err = 0;
+ 	bool requires_tuning_nonuhs = false;
++	unsigned long flags;
+ 
+ 	host = mmc_priv(mmc);
+ 
+ 	sdhci_runtime_pm_get(host);
+ 	disable_irq(host->irq);
+-	spin_lock(&host->lock);
++	spin_lock_irqsave(&host->lock, flags);
+ 
+ 	ctrl = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+ 
+@@ -1913,7 +1914,7 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 		if (host->quirks2 & SDHCI_QUIRK2_TUNING_WORK_AROUND)
+ 			ctrl |= SDHCI_CTRL_TUNED_CLK;
+ 	} else {
+-		spin_unlock(&host->lock);
++		spin_unlock_irqrestore(&host->lock, flags);
+ 		enable_irq(host->irq);
+ 		sdhci_runtime_pm_put(host);
+ 		return 0;
+@@ -1986,7 +1987,7 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 		host->cmd = NULL;
+ 		host->mrq = NULL;
+ 
+-		spin_unlock(&host->lock);
++		spin_unlock_irqrestore(&host->lock, flags);
+ 		enable_irq(host->irq);
+ 
+ 		/* Wait for Buffer Read Ready interrupt */
+@@ -1994,7 +1995,7 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ 					(host->tuning_done == 1),
+ 					msecs_to_jiffies(50));
+ 		disable_irq(host->irq);
+-		spin_lock(&host->lock);
++		spin_lock_irqsave(&host->lock, flags);
+ 
+ 		if (!host->tuning_done) {
+ 			pr_info(DRIVER_NAME ": Timeout waiting for "
+@@ -2068,7 +2069,7 @@ out:
+ 		err = 0;
+ 
+ 	sdhci_clear_set_irqs(host, SDHCI_INT_DATA_AVAIL, ier);
+-	spin_unlock(&host->lock);
++	spin_unlock_irqrestore(&host->lock, flags);
+ 	enable_irq(host->irq);
+ 	sdhci_runtime_pm_put(host);
+ 
+diff --git a/drivers/mmc/host/sdhci_f_sdh30.c b/drivers/mmc/host/sdhci_f_sdh30.c
+index 80468b0..3721932 100644
+--- a/drivers/mmc/host/sdhci_f_sdh30.c
++++ b/drivers/mmc/host/sdhci_f_sdh30.c
+@@ -115,8 +115,7 @@ static int sdhci_f_sdh30_probe(struct platform_device *pdev)
+ 	priv = sdhci_priv(host); 
+ 	priv->dev = dev;
+ 
+-	host->quirks =  SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC |
+-		        SDHCI_QUIRK_INVERTED_WRITE_PROTECT;
++	host->quirks =  SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC;
+ 	host->quirks2 = SDHCI_QUIRK2_SUPPORT_SINGLE |
+ 			SDHCI_QUIRK2_UNSUPPORT_3_0_V |
+ 			SDHCI_QUIRK2_VOLTAGE_SWITCH |
+@@ -156,6 +155,11 @@ static int sdhci_f_sdh30_probe(struct platform_device *pdev)
+ 		host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
+ 	}
+ 
++	if (of_find_property(pdev->dev.of_node, "inverted-write-protect", NULL)){
++		dev_info(dev, "Applying inverted write protect quirk\n");
++		host->quirks |= SDHCI_QUIRK_INVERTED_WRITE_PROTECT;
++	}
++
+ 	host->hw_name = DRIVER_NAME;
+ 	host->ops = &sdhci_f_sdh30_ops;
+ 	host->irq = irq;
+diff --git a/drivers/mtd/spi-nor/spi-nor.c b/drivers/mtd/spi-nor/spi-nor.c
+index 95f3143..06857e4 100644
+--- a/drivers/mtd/spi-nor/spi-nor.c
++++ b/drivers/mtd/spi-nor/spi-nor.c
+@@ -55,6 +55,7 @@ struct flash_info {
+ #define	SPI_NOR_DUAL_READ	0x20    /* Flash supports Dual Read */
+ #define	SPI_NOR_QUAD_READ	0x40    /* Flash supports Quad Read */
+ #define	USE_FSR			0x80	/* use flag status register */
++#define QUIRK_EVCR		0x100	/* skip check evcr for Micron chips */
+ };
+ 
+ #define JEDEC_MFR(info)	((info)->id[0])
+@@ -560,14 +561,14 @@ static const struct spi_device_id spi_nor_ids[] = {
+ 	{ "mx66l1g55g",  INFO(0xc2261b, 0, 64 * 1024, 2048, SPI_NOR_QUAD_READ) },
+ 
+ 	/* Micron */
+-	{ "n25q032",	 INFO(0x20ba16, 0, 64 * 1024,   64, 0) },
+-	{ "n25q064",     INFO(0x20ba17, 0, 64 * 1024,  128, 0) },
+-	{ "n25q128a11",  INFO(0x20bb18, 0, 64 * 1024,  256, 0) },
+-	{ "n25q128a13",  INFO(0x20ba18, 0, 64 * 1024,  256, 0) },
+-	{ "n25q256a",    INFO(0x20ba19, 0, 64 * 1024,  512, SECT_4K) },
+-	{ "n25q512a",    INFO(0x20bb20, 0, 64 * 1024, 1024, SECT_4K | USE_FSR) },
+-	{ "n25q512ax3",  INFO(0x20ba20, 0, 64 * 1024, 1024, USE_FSR) },
+-	{ "n25q00",      INFO(0x20ba21, 0, 64 * 1024, 2048, USE_FSR) },
++	{ "n25q032",	 INFO(0x20ba16, 0, 64 * 1024,   64, SPI_NOR_QUAD_READ) },
++	{ "n25q064",     INFO(0x20ba17, 0, 64 * 1024,  128, SPI_NOR_QUAD_READ) },
++	{ "n25q128a11",  INFO(0x20bb18, 0, 64 * 1024,  256, SPI_NOR_QUAD_READ | QUIRK_EVCR) },
++	{ "n25q128a13",  INFO(0x20ba18, 0, 64 * 1024,  256, SPI_NOR_QUAD_READ | QUIRK_EVCR) },
++	{ "n25q256a",    INFO(0x20ba19, 0, 64 * 1024,  512, SECT_4K | SPI_NOR_QUAD_READ) },
++	{ "n25q512a",    INFO(0x20bb20, 0, 64 * 1024, 1024, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ | QUIRK_EVCR) },
++	{ "n25q512ax3",  INFO(0x20ba20, 0, 64 * 1024, 1024, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ | QUIRK_EVCR) },
++	{ "n25q00",      INFO(0x20ba21, 0, 64 * 1024, 2048, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ) },
+ 
+ 	/* PMC */
+ 	{ "pm25lv512",   INFO(0,        0, 32 * 1024,    2, SECT_4K_PMC) },
+@@ -891,6 +892,48 @@ static int spansion_quad_enable(struct spi_nor *nor)
+ 	return 0;
+ }
+ 
++static int micron_quad_enable(struct spi_nor *nor)
++{
++	int ret;
++	u8 val;
++
++	ret = nor->read_reg(nor, SPINOR_OP_RD_EVCR, &val, 1);
++	if (ret < 0) {
++		dev_err(nor->dev, "error %d reading EVCR\n", ret);
++		return ret;
++	}
++
++	write_enable(nor);
++
++	/* set EVCR, enable quad I/O */
++	nor->cmd_buf[0] = val & ~EVCR_QUAD_EN_MICRON;
++	ret = nor->write_reg(nor, SPINOR_OP_WD_EVCR, nor->cmd_buf, 1, 0);
++	if (ret < 0) {
++		dev_err(nor->dev, "error while writing EVCR register\n");
++		return ret;
++	}
++
++	ret = spi_nor_wait_till_ready(nor);
++	if (ret)
++		return ret;
++
++	if (nor->flags && SNOR_F_QUIRK_EVCR)
++		return 0;
++
++	/* read EVCR and check it */
++	ret = nor->read_reg(nor, SPINOR_OP_RD_EVCR, &val, 1);
++	if (ret < 0) {
++		dev_err(nor->dev, "error %d reading EVCR\n", ret);
++		return ret;
++	}
++	if (val & EVCR_QUAD_EN_MICRON) {
++		dev_err(nor->dev, "Micron EVCR Quad bit not clear\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
+ static int set_quad_mode(struct spi_nor *nor, struct flash_info *info)
+ {
+ 	int status;
+@@ -903,6 +946,13 @@ static int set_quad_mode(struct spi_nor *nor, struct flash_info *info)
+ 			return -EINVAL;
+ 		}
+ 		return status;
++	case CFI_MFR_ST:
++		status = micron_quad_enable(nor);
++		if (status) {
++			dev_err(nor->dev, "Micron quad-read not enabled\n");
++			return -EINVAL;
++		}
++		return status;
+ 	default:
+ 		status = spansion_quad_enable(nor);
+ 		if (status) {
+@@ -1011,6 +1061,9 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
+ 	if (info->flags & USE_FSR)
+ 		nor->flags |= SNOR_F_USE_FSR;
+ 
++	if (info->flags & QUIRK_EVCR)
++		nor->flags |= SNOR_F_QUIRK_EVCR;
++
+ #ifdef CONFIG_MTD_SPI_NOR_USE_4K_SECTORS
+ 	/* prefer "small sector" erase if possible */
+ 	if (info->flags & SECT_4K) {
+diff --git a/drivers/pci/host/pcie_f_pcie2_dme.c b/drivers/pci/host/pcie_f_pcie2_dme.c
+index 9ec792e..27cf4c8 100644
+--- a/drivers/pci/host/pcie_f_pcie2_dme.c
++++ b/drivers/pci/host/pcie_f_pcie2_dme.c
+@@ -1679,7 +1679,7 @@ static int f_pcie_pm_suspend(struct device *dev)
+ 		return 0;
+ 	}
+ 
+-	if (dme_port->rc && dme_port->rc->inited) {
++	if (dme_port->rc) {
+ 		/* rc mode */
+ 		rc = dme_port->rc;
+ 		for (clk_id = 0; clk_id < rc->clk_num; clk_id++)
+diff --git a/drivers/spi/spi-mb86s7x.c b/drivers/spi/spi-mb86s7x.c
+index 7eaacf0..a87e448 100644
+--- a/drivers/spi/spi-mb86s7x.c
++++ b/drivers/spi/spi-mb86s7x.c
+@@ -228,7 +228,7 @@ static int s7x_hsspi_config(struct spi_master *master,
+ 
+ 	rate = clk_get_rate(hsspi->clk);
+ 
+-	div = DIV_ROUND_UP(rate, speed * 2);
++	div = DIV_ROUND_UP(rate, speed);
+ 	if (div > 127) {
+ 		dev_err(hsspi->dev, "Requested rate too low (%u)\n",
+ 			hsspi->speed);
+@@ -267,7 +267,7 @@ static int s7x_hsspi_config(struct spi_master *master,
+ 	val |= BIT(SENDIAN);
+ 
+ 	val &= ~(CDRS_MASK << CDRS_SHIFT);
+-	val |= (div << CDRS_SHIFT);
++	val |= ((div >> 1) << CDRS_SHIFT);
+ 	writel_relaxed(val, hsspi->regs + PCC(cs));
+ 
+ 	val = readl_relaxed(hsspi->regs + FIFOCFG);
+@@ -450,13 +450,61 @@ static void s7x_hsspi_set_cs(struct spi_device *spi, bool enable)
+ 	}
+ }
+ 
++static int s7x_hsspi_enable(struct spi_master *master)
++{
++	struct s7x_hsspi *hsspi = spi_master_get_devdata(master);
++	u32 val;
++	int clkid;
++	struct clk *clk;
++
++	clk = devm_clk_get(hsspi->dev, "iHCLK");
++	clkid = 0;
++	if (IS_ERR(hsspi->clk)) {
++		clk = devm_clk_get(hsspi->dev, "iPCLK");
++		clkid = 1;
++		if (IS_ERR(hsspi->clk)) {
++			dev_err(hsspi->dev, "No source clock\n");
++			return PTR_ERR(clk);
++		}
++	}
++
++	/* Disable module */
++	writel_relaxed(0, hsspi->regs + MCTRL);
++	while (readl_relaxed(hsspi->regs + MCTRL) & BIT(MES))
++		cpu_relax();
++
++	writel_relaxed(0, hsspi->regs + TXE);
++	writel_relaxed(0, hsspi->regs + RXE);
++	val = readl_relaxed(hsspi->regs + TXF);
++	writel_relaxed(val, hsspi->regs + TXC);
++	val = readl_relaxed(hsspi->regs + RXF);
++	writel_relaxed(val, hsspi->regs + RXC);
++	val = readl_relaxed(hsspi->regs + FAULTF);
++	writel_relaxed(val, hsspi->regs + FAULTC);
++
++	val = readl_relaxed(hsspi->regs + DMCFG);
++	val &= ~BIT(SSDC);
++	val &= ~BIT(MSTARTEN);
++	writel_relaxed(val, hsspi->regs + DMCFG);
++
++	val = readl_relaxed(hsspi->regs + MCTRL);
++	if (clkid == 0)
++		val &= ~BIT(IPCLK);
++	else
++		val |= BIT(IPCLK);
++	val &= ~BIT(CSEN);
++	val |= BIT(MEN);
++	writel_relaxed(val, hsspi->regs + MCTRL);
++
++	return 0;
++}
++
+ static int s7x_hsspi_probe(struct platform_device *pdev)
+ {
+ 	struct spi_master *master;
+ 	struct s7x_hsspi *hsspi;
+ 	struct resource *res;
+ 	int ret, clkid;
+-	u32 val;
+ 
+ 	master = spi_alloc_master(&pdev->dev, sizeof(*hsspi));
+ 	if (!master)
+@@ -505,37 +553,13 @@ static int s7x_hsspi_probe(struct platform_device *pdev)
+ 	master->set_cs = s7x_hsspi_set_cs;
+ 	master->transfer_one = s7x_hsspi_transfer_one;
+ 
++	ret = s7x_hsspi_enable(master);
++        if (ret)
++                goto fail_enable;
++
+ 	pm_runtime_set_active(hsspi->dev);
+ 	pm_runtime_enable(hsspi->dev);
+ 
+-	/* Disable module */
+-	writel_relaxed(0, hsspi->regs + MCTRL);
+-	while (readl_relaxed(hsspi->regs + MCTRL) & BIT(MES))
+-		cpu_relax();
+-
+-	writel_relaxed(0, hsspi->regs + TXE);
+-	writel_relaxed(0, hsspi->regs + RXE);
+-	val = readl_relaxed(hsspi->regs + TXF);
+-	writel_relaxed(val, hsspi->regs + TXC);
+-	val = readl_relaxed(hsspi->regs + RXF);
+-	writel_relaxed(val, hsspi->regs + RXC);
+-	val = readl_relaxed(hsspi->regs + FAULTF);
+-	writel_relaxed(val, hsspi->regs + FAULTC);
+-
+-	val = readl_relaxed(hsspi->regs + DMCFG);
+-	val &= ~BIT(SSDC);
+-	val &= ~BIT(MSTARTEN);
+-	writel_relaxed(val, hsspi->regs + DMCFG);
+-
+-	val = readl_relaxed(hsspi->regs + MCTRL);
+-	if (clkid == 0)
+-		val &= ~BIT(IPCLK);
+-	else
+-		val |= BIT(IPCLK);
+-	val &= ~BIT(CSEN);
+-	val |= BIT(MEN);
+-	writel_relaxed(val, hsspi->regs + MCTRL);
+-
+ 	ret = devm_spi_register_master(hsspi->dev, master);
+ 	if (ret)
+ 		goto disable_pm;
+@@ -544,6 +568,7 @@ static int s7x_hsspi_probe(struct platform_device *pdev)
+ 
+ disable_pm:
+ 	pm_runtime_disable(hsspi->dev);
++fail_enable:
+ 	clk_disable_unprepare(hsspi->clk);
+ put_spi:
+ 	spi_master_put(master);
+@@ -585,6 +610,10 @@ static int s7x_hsspi_resume(struct device *dev)
+ 		return ret;
+ 	pm_runtime_put(dev);
+ 
++	ret = s7x_hsspi_enable(master);
++	if (ret)
++		return ret;
++
+ 	return spi_master_resume(master);
+ }
+ #endif /* CONFIG_PM_SLEEP */
+diff --git a/drivers/tty/serial/amba-pl011.c b/drivers/tty/serial/amba-pl011.c
+index 22688bf..ed9b095 100755
+--- a/drivers/tty/serial/amba-pl011.c
++++ b/drivers/tty/serial/amba-pl011.c
+@@ -58,6 +58,9 @@
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/sizes.h>
+ #include <linux/io.h>
++#include <linux/workqueue.h>
++#include <linux/pm_domain.h>
++#include <linux/pm_runtime.h>
+ 
+ #define UART_NR			14
+ 
+@@ -165,6 +168,8 @@ struct uart_amba_port {
+ 	unsigned int		old_cr;		/* state during shutdown */
+ 	bool			autorts;
+ 	char			type[12];
++	struct delayed_work	tx_softirq_work;
++	unsigned int		tx_irq_seen;	/* 0=none, 1=1, 2=2 or more */
+ #ifdef CONFIG_DMA_ENGINE
+ 	/* DMA stuff */
+ 	bool			using_tx_dma;
+@@ -174,6 +179,13 @@ struct uart_amba_port {
+ #endif
+ };
+ 
++static bool pl011_tx_chars(struct uart_amba_port *uap);
++
++#ifdef CONFIG_PM
++static int pl011_suspend(struct amba_device *dev, pm_message_t state);
++static int pl011_resume(struct amba_device *dev);
++#endif
++
+ /*
+  * Reads up to 256 characters from the FIFO or until it's empty and
+  * inserts them into the TTY layer. Returns the number of characters
+@@ -1183,6 +1195,8 @@ static void pl011_start_tx(struct uart_port *port)
+ 	if (!pl011_dma_tx_start(uap)) {
+ 		uap->im |= UART011_TXIM;
+ 		writew(uap->im, uap->port.membase + UART011_IMSC);
++		if (!uap->tx_irq_seen)
++			pl011_tx_chars(uap);
+ 	}
+ }
+ 
+@@ -1239,40 +1253,98 @@ static void pl011_rx_chars(struct uart_amba_port *uap)
+ 	spin_lock(&uap->port.lock);
+ }
+ 
+-static void pl011_tx_chars(struct uart_amba_port *uap)
++/*
++ * Transmit a character
++ * There must be at least one free entry in the TX FIFO to accept the char.
++ *
++ * Returns true if the FIFO might have space in it afterwards;
++ * returns false if the FIFO definitely became full.
++ */
++static bool pl011_tx_char(struct uart_amba_port *uap, unsigned char c)
++{
++	writew(c, uap->port.membase + UART01x_DR);
++	uap->port.icount.tx++;
++
++	if (likely(uap->tx_irq_seen > 1))
++		return true;
++
++	return !(readw(uap->port.membase + UART01x_FR) & UART01x_FR_TXFF);
++}
++
++static bool pl011_tx_chars(struct uart_amba_port *uap)
+ {
+ 	struct circ_buf *xmit = &uap->port.state->xmit;
+ 	int count;
+ 
++	if (unlikely(uap->tx_irq_seen < 2))
++		/*
++		 * Initial FIFO fill level unknown: we must check TXFF
++		 * after each write, so just try to fill up the FIFO.
++		 */
++		count = uap->fifosize;
++	else /* tx_irq_seen >= 2 */
++		/*
++		 * FIFO initially at least half-empty, so we can simply
++		 * write half the FIFO without polling TXFF.
++
++		 * Note: the *first* TX IRQ can still race with
++		 * pl011_start_tx_pio(), which can result in the FIFO
++		 * being fuller than expected in that case.
++		 */
++		count = uap->fifosize >> 1;
++
++	/*
++	 * If the FIFO is full we're guaranteed a TX IRQ at some later point,
++	 * and can't transmit immediately in any case:
++	 */
++	if (unlikely(uap->tx_irq_seen < 2 &&
++		     readw(uap->port.membase + UART01x_FR) & UART01x_FR_TXFF))
++		return false;
++
+ 	if (uap->port.x_char) {
+-		writew(uap->port.x_char, uap->port.membase + UART01x_DR);
+-		uap->port.icount.tx++;
++		pl011_tx_char(uap, uap->port.x_char);
+ 		uap->port.x_char = 0;
+-		return;
++		--count;
+ 	}
+ 	if (uart_circ_empty(xmit) || uart_tx_stopped(&uap->port)) {
+ 		pl011_stop_tx(&uap->port);
+-		return;
++		goto done;
+ 	}
+ 
+ 	/* If we are using DMA mode, try to send some characters. */
+ 	if (pl011_dma_tx_irq(uap))
+-		return;
++		goto done;
+ 
+-	count = uap->fifosize >> 1;
+-	do {
+-		writew(xmit->buf[xmit->tail], uap->port.membase + UART01x_DR);
++	while (count-- > 0 && pl011_tx_char(uap, xmit->buf[xmit->tail])) {
+ 		xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
+-		uap->port.icount.tx++;
+ 		if (uart_circ_empty(xmit))
+ 			break;
+-	} while (--count > 0);
++	}
+ 
+ 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+ 		uart_write_wakeup(&uap->port);
+ 
+-	if (uart_circ_empty(xmit))
++	if (uart_circ_empty(xmit)) {
+ 		pl011_stop_tx(&uap->port);
++		goto done;
++	}
++
++	if (unlikely(!uap->tx_irq_seen))
++		schedule_delayed_work(&uap->tx_softirq_work, uap->port.timeout);
++
++done:
++	return false;
++}
++
++static void pl011_tx_softirq(struct work_struct *work)
++{
++	struct delayed_work *dwork = to_delayed_work(work);
++	struct uart_amba_port *uap =
++		container_of(dwork, struct uart_amba_port, tx_softirq_work);
++
++	spin_lock(&uap->port.lock);
++	while (pl011_tx_chars(uap)) ;
++	spin_unlock(&uap->port.lock);
+ }
+ 
+ static void pl011_modem_status(struct uart_amba_port *uap)
+@@ -1299,6 +1371,17 @@ static void pl011_modem_status(struct uart_amba_port *uap)
+ 	wake_up_interruptible(&uap->port.state->port.delta_msr_wait);
+ }
+ 
++static void pl011_tx_irq_seen(struct uart_amba_port *uap)
++{
++	if (likely(uap->tx_irq_seen > 1))
++		return;
++
++	uap->tx_irq_seen++;
++	if (uap->tx_irq_seen < 2)
++		/* first TX IRQ */
++		cancel_delayed_work(&uap->tx_softirq_work);
++}
++
+ static irqreturn_t pl011_int(int irq, void *dev_id)
+ {
+ 	struct uart_amba_port *uap = dev_id;
+@@ -1337,8 +1420,10 @@ static irqreturn_t pl011_int(int irq, void *dev_id)
+ 			if (status & (UART011_DSRMIS|UART011_DCDMIS|
+ 				      UART011_CTSMIS|UART011_RIMIS))
+ 				pl011_modem_status(uap);
+-			if (status & UART011_TXIS)
++			if (status & UART011_TXIS) {
++				pl011_tx_irq_seen(uap);
+ 				pl011_tx_chars(uap);
++			}
+ 
+ 			if (pass_counter-- == 0)
+ 				break;
+@@ -1486,7 +1571,7 @@ static int pl011_hwinit(struct uart_port *port)
+ 	if (!IS_ERR(uap->pins_default)) {
+ 		retval = pinctrl_select_state(uap->pinctrl, uap->pins_default);
+ 		if (retval)
+-			dev_err(port->dev,
++			dev_dbg(port->dev,
+ 				"could not set default pins\n");
+ 	}
+ 
+@@ -1532,6 +1617,11 @@ static int pl011_startup(struct uart_port *port)
+ 	if (retval)
+ 		goto clk_dis;
+ 
++	/* Assume that TX IRQ doesn't work until we see one: */
++	uap->tx_irq_seen = 0;
++
++	cancel_delayed_work_sync(&uap->tx_softirq_work);
++
+ 	writew(uap->im, uap->port.membase + UART011_IMSC);
+ 
+ 	/*
+@@ -1563,7 +1653,9 @@ static int pl011_startup(struct uart_port *port)
+ 			writew(0xff, uap->port.membase + UART011_MIS);
+ 		writew(0, uap->port.membase + uap->lcrh_tx);
+ 	}
++	/*
+ 	writew(0, uap->port.membase + UART01x_DR);
++	*/
+ 	while (readw(uap->port.membase + UART01x_FR) & UART01x_FR_BUSY)
+ 		barrier();
+ 
+@@ -1595,8 +1687,11 @@ static int pl011_startup(struct uart_port *port)
+ 	if (!pl011_dma_rx_running(uap))
+ 		uap->im |= UART011_RXIM;
+ 	writew(uap->im, uap->port.membase + UART011_IMSC);
++
+ 	spin_unlock_irq(&uap->port.lock);
+ 
++	INIT_DELAYED_WORK(&uap->tx_softirq_work, pl011_tx_softirq);
++
+ 	return 0;
+ 
+  clk_dis:
+@@ -2025,7 +2120,7 @@ static int __init pl011_console_setup(struct console *co, char *options)
+ 	if (!IS_ERR(uap->pins_default)) {
+ 		ret = pinctrl_select_state(uap->pinctrl, uap->pins_default);
+ 		if (ret)
+-			dev_err(uap->port.dev,
++			dev_dbg(uap->port.dev,
+ 				"could not set default pins\n");
+ 	}
+ 
+@@ -2077,6 +2172,55 @@ static struct uart_driver amba_reg = {
+ 	.cons			= AMBA_CONSOLE,
+ };
+ 
++
++int pl011_pm_start(struct device *dev)
++{
++	struct uart_amba_port *uap;
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(amba_ports); i++) {
++		if (!amba_ports[i])
++			continue;
++
++		if (amba_ports[i]->port.dev == dev) {
++			uap = amba_ports[i];
++			break;
++		}
++	}
++
++	if (!uap)
++		return -EINVAL;
++
++	writew(uap->old_cr, uap->port.membase + UART011_CR);
++	return uart_resume_port(&amba_reg, &uap->port);
++}
++
++int pl011_pm_stop(struct device *dev)
++{
++	struct uart_amba_port *uap;
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(amba_ports); i++) {
++		if (!amba_ports[i])
++			continue;
++		if (amba_ports[i]->port.dev == dev) {
++			uap = amba_ports[i];
++			break;
++		}
++	}
++
++	if (!uap)
++		return -EINVAL;
++
++	uap->old_cr = readw(uap->port.membase + UART011_CR);
++	return uart_suspend_port(&amba_reg, &uap->port);
++}
++
++static struct gpd_dev_ops pl011_gpd_dev_ops = {
++	.resume = pl011_pm_start,
++	.suspend = pl011_pm_stop,
++};
++
+ static int pl011_probe_dt_alias(int index, struct device *dev)
+ {
+ 	struct device_node *np;
+@@ -2149,7 +2293,7 @@ static int pl011_probe(struct amba_device *dev, const struct amba_id *id)
+ 	uap->pins_default = pinctrl_lookup_state(uap->pinctrl,
+ 						 PINCTRL_STATE_DEFAULT);
+ 	if (IS_ERR(uap->pins_default))
+-		dev_err(&dev->dev, "could not get default pinstate\n");
++		dev_dbg(&dev->dev, "could not get default pinstate\n");
+ 
+ 	uap->pins_sleep = pinctrl_lookup_state(uap->pinctrl,
+ 					       PINCTRL_STATE_SLEEP);
+@@ -2176,6 +2320,7 @@ static int pl011_probe(struct amba_device *dev, const struct amba_id *id)
+ 	uap->port.ops = &amba_pl011_pops;
+ 	uap->port.flags = UPF_BOOT_AUTOCONF;
+ 	uap->port.line = i;
++	INIT_DELAYED_WORK(&uap->tx_softirq_work, pl011_tx_softirq);
+ 	pl011_dma_probe(&dev->dev, uap);
+ 
+ 	/* Ensure interrupts from this UART are masked and cleared */
+@@ -2186,6 +2331,10 @@ static int pl011_probe(struct amba_device *dev, const struct amba_id *id)
+ 
+ 	amba_ports[i] = uap;
+ 
++	ret = pm_genpd_add_callbacks(&dev->dev, &pl011_gpd_dev_ops, NULL);
++	if (ret)
++		dev_warn(&dev->dev, "pm_genpd_add_callbacks fail\n");
++
+ 	amba_set_drvdata(dev, uap);
+ 	ret = uart_add_one_port(&amba_reg, &uap->port);
+ 	if (ret) {
+diff --git a/include/linux/mtd/spi-nor.h b/include/linux/mtd/spi-nor.h
+index 63aeccf..e9ffe10 100644
+--- a/include/linux/mtd/spi-nor.h
++++ b/include/linux/mtd/spi-nor.h
+@@ -56,6 +56,10 @@
+ /* Used for Spansion flashes only. */
+ #define SPINOR_OP_BRWR		0x17	/* Bank register write */
+ 
++/* Used for Micron flashes only. */
++#define SPINOR_OP_RD_EVCR      0x65    /* Read EVCR register */
++#define SPINOR_OP_WD_EVCR      0x61    /* Write EVCR register */
++
+ /* Status Register bits. */
+ #define SR_WIP			1	/* Write in progress */
+ #define SR_WEL			2	/* Write enable latch */
+@@ -67,6 +71,9 @@
+ 
+ #define SR_QUAD_EN_MX		0x40	/* Macronix Quad I/O */
+ 
++/* Enhanced Volatile Configuration Register bits */
++#define EVCR_QUAD_EN_MICRON    0x80    /* Micron Quad I/O */
++
+ /* Flag Status Register bits */
+ #define FSR_READY		0x80
+ 
+@@ -118,6 +125,7 @@ enum spi_nor_ops {
+ 
+ enum spi_nor_option_flags {
+ 	SNOR_F_USE_FSR		= BIT(0),
++	SNOR_F_QUIRK_EVCR	= BIT(1),
+ };
+ 
+ /**
+-- 
+1.7.1
+

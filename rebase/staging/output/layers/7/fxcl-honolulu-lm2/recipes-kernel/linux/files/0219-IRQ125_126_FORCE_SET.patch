@@ -1,0 +1,33 @@
+From eddd381eeed3ce072cd54065bbdb6cecd969163b Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Tue, 24 Jan 2017 07:28:36 +0000
+Subject: [PATCH 173/174] 0219-IRQ125_126_FORCE_SET
+
+
+diff --git a/kernel/irq/pm.c b/kernel/irq/pm.c
+index 7acf5f5..0b7f09f 100644
+--- a/kernel/irq/pm.c
++++ b/kernel/irq/pm.c
+@@ -45,6 +45,19 @@ void suspend_device_irqs(void)
+ 		__disable_irq(desc, irq, true);
+ 		raw_spin_unlock_irqrestore(&desc->lock, flags);
+ 	}
++#if 1	/* IRQ 125,126 force set */
++	for(i=0;i<lm2_use_irq_size;i++) {
++		if ( lm2_use_irq[i] == 126 )
++			break;
++	}
++	if ( i == lm2_use_irq_size ){
++		lm2_use_irq[lm2_use_irq_size]=125;
++		lm2_use_irq_size++;
++		lm2_use_irq[lm2_use_irq_size]=126;
++		lm2_use_irq_size++;
++		printk("%s: irq=125,126 force set.\n",__func__);
++	}
++#endif
+ 
+ 	for_each_irq_desc(irq, desc)
+ 		if (desc->istate & IRQS_SUSPENDED)
+-- 
+1.7.9.5
+

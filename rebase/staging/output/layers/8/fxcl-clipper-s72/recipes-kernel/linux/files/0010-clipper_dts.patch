@@ -1,0 +1,37 @@
+From 3ccfdcb492daf86ee80e1da56336d4a3ac0d47f6 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:24 +0000
+Subject: [PATCH 07/34] 0010-clipper_dts
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index 332f7d2..cb09a6f 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -1161,6 +1161,7 @@
+ 	fdb0: fdb.0 {
+ 		compatible = "fujitsu,f_fdb",
+ 			     "simple-bus";
++		status = "disabled";
+ 
+ 		id = <0>;
+ 		#stream-id-cells = <2>;
+@@ -1224,6 +1225,7 @@
+ 
+ 	sdhci0: emmc@300c0000 {
+ 		compatible = "fujitsu,f_sdh30";
++		status = "disabled";
+ 		reg = <0 0x300c0000 0x1000>;
+ 		interrupts = <0 164 0x4>,
+ 			     <0 165 0x4>;
+@@ -1252,6 +1254,7 @@
+ 
+ 	sdhci2: sdio@31410000 {
+ 		compatible = "fujitsu,f_sdh30";
++		status = "disabled";
+ 		reg = <0 0x31410000 0x1000>;
+ 		interrupts = <0 176 0x4>,
+ 			     <0 177 0x4>;
+-- 
+1.7.9.5
+

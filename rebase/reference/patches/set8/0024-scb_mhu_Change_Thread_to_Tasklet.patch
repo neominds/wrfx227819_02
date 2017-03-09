@@ -1,0 +1,147 @@
+From 6b6b2c96768d62c3530b69a7582573ab58389999 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:25 +0900
+Subject: [PATCH 22/29] P26_0024-scb_mhu_Change_Thread_to_Tasklet_rebase
+
+
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 0e9157a..65264b2 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -22,7 +22,7 @@
+ #define HPNONSEC	1
+ #define SECURE		2
+ 
+-#define	THREAD_USE
++#define TASKLET_USE
+ 
+ int __initdata shm_offset = 0x800;
+ 
+@@ -32,9 +32,9 @@ static void __iomem *cmd_to_scb = MB86S70_SHM_FROM_SCB_VIRT + 0x200;
+ static void __iomem *rsp_to_scb = MB86S70_SHM_FROM_SCB_VIRT + 0x300;
+ static mhu_handler_t handler[MHU_NUM_CMDS];
+ static DEFINE_SPINLOCK(fsm_lock);
+-#ifdef THREAD_USE
++#ifdef TASKLET_USE
+ static DEFINE_SPINLOCK(got_data_lock);
+-#endif
++#endif	/* TASKLET_USE */
+ static LIST_HEAD(pending_xfers);
+ static LIST_HEAD(free_xfers);
+ static struct ipc_client mhu_cl;
+@@ -120,50 +120,26 @@ static int __init set_shm_offset(char *str)
+ __setup("shm_offset=", set_shm_offset);
+ 
+ 
+-#ifdef THREAD_USE 
+-//#define	THREAD_USE_DEBUG
++#ifdef TASKLET_USE
+ static void got_data(u32 code);
+ #define SCB_MHU_BUF	16
+ static unsigned char pop_cnt=0;
+ static unsigned char push_cnt=0;
+ static u32 mhu_buf[SCB_MHU_BUF];
+-struct task_struct *nt=NULL;
++static unsigned char init_flag=0;
++struct tasklet_struct tasklet;
+ 
+-static int scb_mhu_thread(void *ptr)
++static void scb_mhu_thread(void *ptr)
+ {
+-	while (1)
+-	{
+-		if ( pop_cnt != push_cnt ) {
+-#ifdef THREAD_USE_DEBUG
+-	printk(KERN_ERR "** scb_mhu_thread Call(%d:%d)\n",pop_cnt,push_cnt);
+-#endif
++	while ( pop_cnt != push_cnt ) {
+ 			got_data(mhu_buf[pop_cnt]);
+ 			pop_cnt++;
+ 			if ( pop_cnt >= SCB_MHU_BUF )
+ 				pop_cnt=0;
+-		} else {
+-			schedule();	
+ 		}
+ 	}
+-	return 0;
+-}
+ 
+-static int __init mhu_thread_init(void)
+-{
+-#ifdef THREAD_USE_DEBUG
+-	printk(KERN_ERR "** mhu_thread_init Start\n");
+-#endif
+-	nt = kthread_run(&scb_mhu_thread, NULL, "%s_thread%d", "scb_mhu", 0);
+-	if (IS_ERR(nt))
+-		return PTR_ERR(nt);
+-
+-#ifdef THREAD_USE_DEBUG
+-	printk(KERN_ERR "** mhu_thread_init End\n");
+-#endif
+-	return 0;
+-}
+-subsys_initcall(mhu_thread_init);
+-#endif	/* THREAD_USE */
++#endif	/* TASKLET_USE */
+ 
+ static int mhu_alloc_xfers(int n, struct list_head *list)
+ {
+@@ -189,13 +165,13 @@ static void got_data(u32 code)
+ 	else
+ 		ev = EV_RC;
+ 
+-#ifdef	THREAD_USE
++#ifdef	TASKLET_USE
+ 	spin_lock_irqsave(&got_data_lock, flags);
+-#endif	/* THREAD_USE */
++#endif	/* TASKLET_USE */
+ 	if (mhu_fsm[fsm_state][ev] == MHU_INVLD) {
+-#ifdef	THREAD_USE
++#ifdef	TASKLET_USE
+ 		spin_unlock_irqrestore(&got_data_lock, flags);
+-#endif	/* THREAD_USE */
++#endif	/* TASKLET_USE */
+ 		pr_err("State-%d EV-%d FSM Broken!\n", fsm_state, ev);
+ 		return;
+ 	}
+@@ -217,9 +193,9 @@ static void got_data(u32 code)
+ 		else
+ 			pr_err("No handler for CMD_%u\n", code);
+ 	}
+-#ifdef	THREAD_USE
++#ifdef	TASKLET_USE
+ 	spin_unlock_irqrestore(&got_data_lock, flags);
+-#endif	/* THREAD_USE */
++#endif	/* TASKLET_USE */
+ }
+ 
+ static void mhu_recv(void *data)
+@@ -232,16 +208,22 @@ static void mhu_recv(void *data)
+ 		ax->code = (u32)data; /* Save response */
+ 		complete(&fsm_rsp);
+ 	} else
+-#ifdef	THREAD_USE
++#ifdef	TASKLET_USE
+ 	{
++		if ( init_flag == 0 ) {
++			tasklet_init(&tasklet, scb_mhu_thread, 0);
++			init_flag++;
++		}
++			
+ 		mhu_buf[push_cnt] = (u32)data;
+ 		push_cnt++;
+ 		if ( push_cnt >= SCB_MHU_BUF)
+ 			push_cnt=0;
++		tasklet_schedule(&tasklet);
+ 	}
+-#else	/* THREAD_USE */
++#else	/* TASKLET_USE */
+ 		got_data((u32)data);
+-#endif	/* THREAD_USE */
++#endif	/* TASKLET_USE */
+ }
+ 
+ static int do_xfer(void)
+-- 
+1.7.1
+

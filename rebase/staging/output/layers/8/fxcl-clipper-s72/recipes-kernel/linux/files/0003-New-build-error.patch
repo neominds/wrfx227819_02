@@ -1,0 +1,228 @@
+From c8043e5b564d16c04c6281166505cdc5e16fc583 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:21 +0000
+Subject: [PATCH 04/34] 0003-New-build-error
+
+
+diff --git a/arch/arm/common/bL_switcher.c b/arch/arm/common/bL_switcher.c
+index 872ff26..6eb00cf 100644
+--- a/arch/arm/common/bL_switcher.c
++++ b/arch/arm/common/bL_switcher.c
+@@ -192,7 +192,9 @@ static int bL_switch_to(unsigned int new_cluster_id)
+ 
+ 	/* Install our "inbound alive" notifier. */
+ 	init_completion(&inbound_alive);
++#if 0
+ 	ipi_nr = register_ipi_completion(&inbound_alive, this_cpu);
++#endif
+ 	ipi_nr |= ((1 << 16) << bL_gic_id[ob_cpu][ob_cluster]);
+ 	mcpm_set_early_poke(ib_cpu, ib_cluster, gic_get_sgir_physaddr(), ipi_nr);
+ 
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 35834e0..91f252b 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -168,8 +168,6 @@ source "drivers/ipack/Kconfig"
+ 
+ source "drivers/reset/Kconfig"
+ 
+-source "drivers/gator/Kconfig"
+-
+ source "drivers/gpu/kds/Kconfig"
+ 
+ #source "drivers/gpu/ump/Kconfig"
+diff --git a/drivers/Kconfig.orig b/drivers/Kconfig.orig
+new file mode 100644
+index 0000000..35834e0
+--- /dev/null
++++ b/drivers/Kconfig.orig
+@@ -0,0 +1,179 @@
++menu "Device Drivers"
++
++source "drivers/base/Kconfig"
++
++source "drivers/bus/Kconfig"
++
++source "drivers/connector/Kconfig"
++
++source "drivers/mtd/Kconfig"
++
++source "drivers/of/Kconfig"
++
++source "drivers/parport/Kconfig"
++
++source "drivers/pnp/Kconfig"
++
++source "drivers/block/Kconfig"
++
++# misc before ide - BLK_DEV_SGIIOC4 depends on SGI_IOC4
++
++source "drivers/misc/Kconfig"
++
++source "drivers/ide/Kconfig"
++
++source "drivers/scsi/Kconfig"
++
++source "drivers/ata/Kconfig"
++
++source "drivers/md/Kconfig"
++
++source "drivers/target/Kconfig"
++
++source "drivers/message/fusion/Kconfig"
++
++source "drivers/firewire/Kconfig"
++
++source "drivers/message/i2o/Kconfig"
++
++source "drivers/macintosh/Kconfig"
++
++source "drivers/net/Kconfig"
++
++source "drivers/isdn/Kconfig"
++
++# input before char - char/joystick depends on it. As does USB.
++
++source "drivers/input/Kconfig"
++
++source "drivers/char/Kconfig"
++
++source "drivers/i2c/Kconfig"
++
++source "drivers/spi/Kconfig"
++
++source "drivers/ssbi/Kconfig"
++
++source "drivers/hsi/Kconfig"
++
++source "drivers/pps/Kconfig"
++
++source "drivers/ptp/Kconfig"
++
++source "drivers/pinctrl/Kconfig"
++
++source "drivers/gpio/Kconfig"
++
++source "drivers/w1/Kconfig"
++
++source "drivers/power/Kconfig"
++
++source "drivers/hwmon/Kconfig"
++
++source "drivers/thermal/Kconfig"
++
++source "drivers/watchdog/Kconfig"
++
++source "drivers/ssb/Kconfig"
++
++source "drivers/bcma/Kconfig"
++
++source "drivers/mfd/Kconfig"
++
++source "drivers/regulator/Kconfig"
++
++source "drivers/media/Kconfig"
++
++source "drivers/video/Kconfig"
++
++source "sound/Kconfig"
++
++source "drivers/hid/Kconfig"
++
++source "drivers/usb/Kconfig"
++
++source "drivers/uwb/Kconfig"
++
++source "drivers/mmc/Kconfig"
++
++source "drivers/memstick/Kconfig"
++
++source "drivers/leds/Kconfig"
++
++source "drivers/accessibility/Kconfig"
++
++source "drivers/infiniband/Kconfig"
++
++source "drivers/edac/Kconfig"
++
++source "drivers/rtc/Kconfig"
++
++source "drivers/dma/Kconfig"
++
++source "drivers/dca/Kconfig"
++
++source "drivers/auxdisplay/Kconfig"
++
++source "drivers/uio/Kconfig"
++
++source "drivers/vfio/Kconfig"
++
++source "drivers/vlynq/Kconfig"
++
++source "drivers/virt/Kconfig"
++
++source "drivers/virtio/Kconfig"
++
++source "drivers/hv/Kconfig"
++
++source "drivers/xen/Kconfig"
++
++source "drivers/staging/Kconfig"
++
++source "drivers/platform/Kconfig"
++
++source "drivers/clk/Kconfig"
++
++source "drivers/hwspinlock/Kconfig"
++
++source "drivers/hwqueue/Kconfig"
++
++source "drivers/clocksource/Kconfig"
++
++source "drivers/mailbox/Kconfig"
++
++source "drivers/iommu/Kconfig"
++
++source "drivers/remoteproc/Kconfig"
++
++source "drivers/rpmsg/Kconfig"
++
++source "drivers/devfreq/Kconfig"
++
++source "drivers/extcon/Kconfig"
++
++source "drivers/memory/Kconfig"
++
++source "drivers/iio/Kconfig"
++
++source "drivers/ntb/Kconfig"
++
++source "drivers/vme/Kconfig"
++
++source "drivers/pwm/Kconfig"
++
++source "drivers/irqchip/Kconfig"
++
++source "drivers/ipack/Kconfig"
++
++source "drivers/reset/Kconfig"
++
++source "drivers/gator/Kconfig"
++
++source "drivers/gpu/kds/Kconfig"
++
++#source "drivers/gpu/ump/Kconfig"
++
++source "drivers/gpu/mali-t6xx/Kconfig"
++
++endmenu
+diff --git a/drivers/gpu/mali-t6xx/Makefile b/drivers/gpu/mali-t6xx/Makefile
+index 51a5178..24a9811 100644
+--- a/drivers/gpu/mali-t6xx/Makefile
++++ b/drivers/gpu/mali-t6xx/Makefile
+@@ -1,2 +1 @@
+-obj-$(CONFIG_MALI_T6XX_VERSION_R3P0)                   += r3p0/
+ obj-$(CONFIG_MALI_T6XX_VERSION_R4P1)                   += r4p1/
+-- 
+1.7.9.5
+

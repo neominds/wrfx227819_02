@@ -1,0 +1,22 @@
+From 404f8492aa43bba88a8ea1fb2c52c625d52b4fe0 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:26 +0900
+Subject: [PATCH 23/29] P27_0025-PCI_MSI_Changei_rebase
+
+
+diff --git a/drivers/pci/host/pcie_f_pcie2_dme_msi.c b/drivers/pci/host/pcie_f_pcie2_dme_msi.c
+index c580a23..6b1bf08 100644
+--- a/drivers/pci/host/pcie_f_pcie2_dme_msi.c
++++ b/drivers/pci/host/pcie_f_pcie2_dme_msi.c
+@@ -91,7 +91,7 @@ int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
+ 	virq = irq_create_mapping(rc->irq_domain, pos);
+ 	irq_set_msi_desc(virq, desc);
+ 
+-	msg.address_lo = virt_to_phys((void *)rc->msi_data);
++	msg.address_lo = rc->msi_data;
+ 	msg.address_hi = 0;
+ 	msg.data = (1 << pos);
+ 	write_msi_msg(virq, &msg);
+-- 
+1.7.1
+

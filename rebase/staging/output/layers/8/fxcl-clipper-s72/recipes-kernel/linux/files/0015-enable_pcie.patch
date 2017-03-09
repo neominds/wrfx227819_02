@@ -1,0 +1,22 @@
+From 536d155a0fae918ea27b25c6081dc0b88a3b132f Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:27 +0000
+Subject: [PATCH 10/34] 0015-enable_pcie
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index fe03090..3f80704 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -1380,7 +1380,7 @@
+ 	};
+ 
+ 	pcie1_x2len:pcie1_x2len@0x33E00600 {
+-		status = "auto";
++		#status = "auto";
+ 		compatible = "fujitsu,sysoc-f_pcie_dmx";
+ 		#address-cells = <2>;
+ 		#size-cells = <1>;
+-- 
+1.7.9.5
+

@@ -1,0 +1,22 @@
+From 4a0a8fd7e60ae30051d0a19bd79205f2da923ce1 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:23 +0900
+Subject: [PATCH 17/29] P21_0019-fix_bootargsi_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 96bae5b..34d678e 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -22,7 +22,7 @@
+ 	};
+ 
+ 	chosen {
+-		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk1p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
++		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
+ 
+ 		linux,initrd-start = <0xc0000000>;
+ 		linux,initrd-end =   <0xc0800000>;
+-- 
+1.7.1
+

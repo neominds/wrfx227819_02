@@ -1,0 +1,183 @@
+From accc897d858c1bdb5758ea9149747059d4375488 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:25 +0900
+Subject: [PATCH 20/29] P24_0022-PCR3_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 5c12752..63d97ac 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -155,8 +155,8 @@
+ 	        #size-cells = <0>;
+ 
+ 		flash@0 {
+-			compatible = "n25q512a";
+-			spi-max-frequency = <31250000>;
++			compatible = "w25q64dw";
++			spi-max-frequency = <50000000>;
+ 			spi-rx-bus-width = <4>;
+ 			spi-tx-bus-width = <4>;
+ 			reg = <0>;
+@@ -165,30 +165,30 @@
+ 			#size-cells = <1>;
+ 
+ 			spipart0@0 {
+-				label = "scb-spi-firmware";
+-				reg = <0 0x1000000>;
++				label = "scb-firmware";
++				reg = <0 0x100000>;
+ 			};
+-
++			spipart0@100000 {
++				label = "scb-param";
++				reg = <0x100000 0x40000>;
+ 		    };
+-
+-		flash@1 {
+-			compatible = "n25q512a";
+-			spi-max-frequency = <31250000>;
+-			spi-rx-bus-width = <4>;
+-                        spi-tx-bus-width = <4>;
+-			reg = <1>;
+-
+-			#address-cells = <1>;
+-			#size-cells = <1>;
+-
+-			spipart0@0 {
+-				label = "spi-romfs";
+-				reg = <0 0x100000>;
++			spipart0@140000 {
++				label = "reserved";
++				reg = <0x140000 0xc0000>;
+ 			};
+-  			spipart1@1 {
+-				label = "spi-user";
+-				reg = <0x100000 0xf00000>;
++			spipart0@200000 {
++				label = "bootloader";
++				reg = <0x200000 0x100000>;
+ 			};
++			spipart0@300000 {
++				label = "reserved2";
++				reg = <0x300000 0x4c0000>;
++			};
++			spipart0@7c0000 {
++				label = "bootparam";
++				reg = <0x7c0000 0x40000>;
++			};
++
+ 		    };
+ 	};
+ 
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index e6584d3..536365e 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -65,12 +65,6 @@ static int mb86s70_gpio_request(struct gpio_chip *gc, unsigned gpio)
+ 	spin_lock_irqsave(&gchip->lock, flags);
+ 
+ 	val = readl(gchip->base + PFR(gpio));
+-#if 1	/* PCR3 no gpio pin */
+-	if ( val & (1 << (gpio%8)) ) {
+-		spin_unlock_irqrestore(&gchip->lock, flags);
+-		return -1;
+-	}
+-#endif
+ 	val &= ~OFFSET(gpio);
+ 	writel(val, gchip->base + PFR(gpio));
+ 
+diff --git a/drivers/mtd/devices/m25p80.c b/drivers/mtd/devices/m25p80.c
+index f9d49c0..d7610d5 100755
+--- a/drivers/mtd/devices/m25p80.c
++++ b/drivers/mtd/devices/m25p80.c
+@@ -1146,6 +1146,9 @@ static const struct spi_device_id m25p_ids[] = {
+ 	{ "w25q80bl", INFO(0xef4014, 0, 64 * 1024,  16, SECT_4K) },
+ 	{ "w25q128", INFO(0xef4018, 0, 64 * 1024, 256, SECT_4K) },
+ 	{ "w25q256", INFO(0xef4019, 0, 64 * 1024, 512, SECT_4K) },
++#if 1	/* PCR3 WR add */
++	{ "w25q64dw", INFO(0xef6017, 0, 64 * 1024, 128, SECT_4K) },
++#endif
+ 
+ 	/* Catalyst / On Semiconductor -- non-JEDEC */
+ 	{ "cat25c11", CAT25_INFO(  16, 8, 16, 1, M25P_NO_ERASE | M25P_NO_FR) },
+diff --git a/drivers/pci/host/pcie_f_pcie2_dme.c b/drivers/pci/host/pcie_f_pcie2_dme.c
+index 27cf4c8..7ebe86d 100644
+--- a/drivers/pci/host/pcie_f_pcie2_dme.c
++++ b/drivers/pci/host/pcie_f_pcie2_dme.c
+@@ -1819,8 +1819,15 @@ static irqreturn_t f_pcie_lig_int(int irq, void *dev_id)
+ {
+ 	struct dme_rc *rc = dev_id;
+ 	irqreturn_t r;
++#if 1	/* PCR3 WR add */
++	unsigned long flags;
+ 
++	local_irq_save(flags);
++#endif
+ 	r = msi_map_intr(rc);
++#if 1	/* PCR3 WR add */
++	local_irq_restore(flags);
++#endif
+ 	return r;
+ }
+ 
+diff --git a/drivers/spi/spi-mb86s7x.c b/drivers/spi/spi-mb86s7x.c
+index a87e448..ac4bc54 100644
+--- a/drivers/spi/spi-mb86s7x.c
++++ b/drivers/spi/spi-mb86s7x.c
+@@ -100,6 +100,9 @@
+ #define TXBIT	1
+ #define RXBIT	2
+ 
++/* PCR3 WR add */
++#define	FORCE_iPCLK_USE
++
+ struct s7x_hsspi {
+ 	spinlock_t lock;
+ 	struct device *dev;
+@@ -457,16 +460,20 @@ static int s7x_hsspi_enable(struct spi_master *master)
+ 	int clkid;
+ 	struct clk *clk;
+ 
++#ifndef	FORCE_iPCLK_USE
+ 	clk = devm_clk_get(hsspi->dev, "iHCLK");
+ 	clkid = 0;
+ 	if (IS_ERR(hsspi->clk)) {
++#endif
+ 		clk = devm_clk_get(hsspi->dev, "iPCLK");
+ 		clkid = 1;
+ 		if (IS_ERR(hsspi->clk)) {
+ 			dev_err(hsspi->dev, "No source clock\n");
+ 			return PTR_ERR(clk);
+ 		}
++#ifndef	FORCE_iPCLK_USE
+ 	}
++#endif
+ 
+ 	/* Disable module */
+ 	writel_relaxed(0, hsspi->regs + MCTRL);
+@@ -523,9 +530,11 @@ static int s7x_hsspi_probe(struct platform_device *pdev)
+ 		goto put_spi;
+ 	}
+ 
++#ifndef	FORCE_iPCLK_USE
+ 	hsspi->clk = devm_clk_get(hsspi->dev, "iHCLK");
+ 	clkid = 0;
+ 	if (IS_ERR(hsspi->clk)) {
++#endif
+ 		hsspi->clk = devm_clk_get(hsspi->dev, "iPCLK");
+ 		clkid = 1;
+ 		if (IS_ERR(hsspi->clk)) {
+@@ -533,7 +542,9 @@ static int s7x_hsspi_probe(struct platform_device *pdev)
+ 			ret = PTR_ERR(hsspi->clk);
+ 			goto put_spi;
+ 		}
++#ifndef	FORCE_iPCLK_USE
+ 	}
++#endif
+ 
+ 	ret = clk_prepare_enable(hsspi->clk);
+ 	if (ret)
+-- 
+1.7.1
+

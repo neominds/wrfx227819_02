@@ -1,0 +1,22 @@
+From ba895ea5921e7c25c6d97f22a87a50c35d3d753b Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Tue, 24 Jan 2017 07:27:49 +0000
+Subject: [PATCH 143/174] linux_150831PM032505
+
+
+diff --git a/drivers/rtc/rtc-quatro53xx.c b/drivers/rtc/rtc-quatro53xx.c
+index 33f361d..9639691 100644
+--- a/drivers/rtc/rtc-quatro53xx.c
++++ b/drivers/rtc/rtc-quatro53xx.c
+@@ -623,7 +623,7 @@ static	struct	platform_driver lm2_rtc_driver = {
+ 	.driver = {
+ 		.name	= "lm2-rtc",
+ 		.owner	= THIS_MODULE,
+-		.pm	= &lm2_rtc_pm_ops,
++		/* .pm	= &lm2_rtc_pm_ops, */
+ 	},
+ 	.id_table	= lm2_rtc_id_table,
+ 	.probe		= lm2_rtc_probe,
+-- 
+1.7.9.5
+

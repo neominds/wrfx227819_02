@@ -1,0 +1,88 @@
+From 42889eb044ae3a8974ded1f8447d60bed81e6882 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Tue, 6 Sep 2016 11:09:23 +0900
+Subject: [PATCH 1/1] freezer: set PF_SUSPEND_TASK flag on tasks that call freeze_processes
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ include/linux/sched.h  |    1 +
+ kernel/freezer.c       |    2 +-
+ kernel/power/process.c |   11 +++++++++++
+ 3 files changed, 13 insertions(+), 1 deletions(-)
+
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index be35da2..4aaacf2 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1724,6 +1724,7 @@ extern void thread_group_cputime_adjusted(struct task_struct *p, cputime_t *ut,
+ #define PF_MEMPOLICY	0x10000000	/* Non-default NUMA mempolicy */
+ #define PF_MUTEX_TESTER	0x20000000	/* Thread belongs to the rt mutex tester */
+ #define PF_FREEZER_SKIP	0x40000000	/* Freezer should not count it as freezable */
++#define PF_SUSPEND_TASK 0x80000000      /* this thread called freeze_processes and should not be frozen */
+ 
+ /*
+  * Only the _current_ task can read/write to tsk->flags, but other
+diff --git a/kernel/freezer.c b/kernel/freezer.c
+index 4ada72f..8f9279b 100644
+--- a/kernel/freezer.c
++++ b/kernel/freezer.c
+@@ -39,7 +39,7 @@ static DEFINE_SPINLOCK(freezer_lock);
+  */
+ bool freezing_slow_path(struct task_struct *p)
+ {
+-	if (p->flags & PF_NOFREEZE)
++	if (p->flags & (PF_NOFREEZE | PF_SUSPEND_TASK))
+ 		return false;
+ 
+ 	if (test_thread_flag(TIF_MEMDIE))
+diff --git a/kernel/power/process.c b/kernel/power/process.c
+index 0695319..349a353 100644
+--- a/kernel/power/process.c
++++ b/kernel/power/process.c
+@@ -127,6 +127,8 @@ done:
+ 
+ /**
+  * freeze_processes - Signal user space processes to enter the refrigerator.
++ * The current thread will not be frozen.  The same process that calls
++ * freeze_processes must later call thaw_processes.
+  *
+  * On success, returns 0.  On failure, -errno and system is fully thawed.
+  */
+@@ -139,6 +141,9 @@ int freeze_processes(void)
+ 	if (error)
+ 		return error;
+ 
++	/* Make sure this task doesn't get frozen */
++	current->flags |= PF_SUSPEND_TASK;
++
+ 	if (!pm_freezing)
+ 		atomic_inc(&system_freezing_cnt);
+ 
+@@ -202,6 +207,7 @@ int freeze_kernel_threads(void)
+ void thaw_processes(void)
+ {
+ 	struct task_struct *g, *p;
++	struct task_struct *curr = current;
+ 
+ 	if (pm_freezing)
+ 		atomic_dec(&system_freezing_cnt);
+@@ -217,10 +223,15 @@ void thaw_processes(void)
+ 
+ 	read_lock(&tasklist_lock);
+ 	do_each_thread(g, p) {
++		/* No other threads should have PF_SUSPEND_TASK set */
++		WARN_ON((p != curr) && (p->flags & PF_SUSPEND_TASK));
+ 		__thaw_task(p);
+ 	} while_each_thread(g, p);
+ 	read_unlock(&tasklist_lock);
+ 
++	WARN_ON(!(curr->flags & PF_SUSPEND_TASK));
++	curr->flags &= ~PF_SUSPEND_TASK;
++
+ 	usermodehelper_enable();
+ 
+ 	schedule();
+-- 
+1.7.1
+

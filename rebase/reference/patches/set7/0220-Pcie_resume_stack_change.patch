@@ -1,0 +1,152 @@
+From ff82508b69623623a0c7dc8722a7be598bc8f307 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Fri, 10 Jun 2016 10:39:42 +0900
+Subject: [PATCH 1/1] Pcie_resume_stack_change
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ arch/arm/mach-lm2/lm2_pm.c       |    9 ++++++++-
+ drivers/pci/pci-driver.c         |    9 +++++++++
+ drivers/pci/pci.c                |    5 +++++
+ drivers/pci/pcie/synopsys_pcie.c |   30 +++++++++++++++++++++++++-----
+ 4 files changed, 47 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm/mach-lm2/lm2_pm.c b/arch/arm/mach-lm2/lm2_pm.c
+index ac4ad7f..ec32168 100644
+--- a/arch/arm/mach-lm2/lm2_pm.c
++++ b/arch/arm/mach-lm2/lm2_pm.c
+@@ -132,10 +132,17 @@ static void lm2_suspend_wait_reg(phys_addr_t addr, u32 set_data)
+ {
+ 	volatile void    __iomem *set_address;
+ 	u32 read_data = 0x0;
++	int to=5;
+ 	set_address = ioremap(addr, 0x4);
+ printk("LM2_PM: Wait %x from %x\n", set_data, set_address);
+-	while (read_data != set_data)
++	while (read_data != set_data && to > 0 ){
+ 		read_data = readl(set_address);
++		mdelay(10);
++		to--;
++	}
++	if ( to == 0 )
++		printk("LM2_PM: Wait End(Timeout)\n");
++
+ 	iounmap(set_address);
+ 	return;
+ }
+diff --git a/drivers/pci/pci-driver.c b/drivers/pci/pci-driver.c
+index 66aabde..cdb0a68 100644
+--- a/drivers/pci/pci-driver.c
++++ b/drivers/pci/pci-driver.c
+@@ -22,6 +22,9 @@
+ #include <linux/kexec.h>
+ #include "pci.h"
+ 
++#if 1   /* Workaround_20160609 */
++extern unsigned char Workaround_20160609;
++#endif
+ struct pci_dynid {
+ 	struct list_head node;
+ 	struct pci_device_id id;
+@@ -719,6 +722,9 @@ static int pci_pm_resume_noirq(struct device *dev)
+ 	struct device_driver *drv = dev->driver;
+ 	int error = 0;
+ 
++#if 1   /* Workaround_20160609 mon_flag=1 */
++        Workaround_20160609=1;
++#endif
+ 	pci_pm_default_resume_early(pci_dev);
+ 
+ 	if (pci_has_legacy_pm_support(pci_dev))
+@@ -727,6 +733,9 @@ static int pci_pm_resume_noirq(struct device *dev)
+ 	if (drv && drv->pm && drv->pm->resume_noirq)
+ 		error = drv->pm->resume_noirq(dev);
+ 
++#if 1   /* Workaround_20160609 mon_flag=0 */
++        Workaround_20160609=0;
++#endif
+ 	return error;
+ }
+ 
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index 79565d4..f388de5 100644
+--- a/drivers/pci/pci.c
++++ b/drivers/pci/pci.c
+@@ -564,7 +564,12 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
+ 	else if (state == PCI_D2 || dev->current_state == PCI_D2)
+ 		udelay(PCI_PM_D2_DELAY);
+ 
++#if 1	/* Workaround_20160609 */
++	mdelay(1);
++#else
+ 	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pmcsr);
++#endif
++
+ 	dev->current_state = (pmcsr & PCI_PM_CTRL_STATE_MASK);
+ 	if (dev->current_state != state && printk_ratelimit())
+ 		dev_info(&dev->dev, "Refused to change power state, "
+diff --git a/drivers/pci/pcie/synopsys_pcie.c b/drivers/pci/pcie/synopsys_pcie.c
+index ddd66db..35571ab 100644
+--- a/drivers/pci/pcie/synopsys_pcie.c
++++ b/drivers/pci/pcie/synopsys_pcie.c
+@@ -39,6 +39,10 @@
+ #define	PCIE_LANE_PHY_CONF_2	2
+ #define	PCIE_LANE_PHY_CONF_3	3	/* l1:p1:cont1:p0 default ! */
+ 
++#if 1	/* Workaround_20160609 */
++unsigned char Workaround_20160609=0;
++#endif
++extern int lm2_board_is_A0(void);
+ static unsigned char   pcie_probe_end=0;
+ 
+ struct pcie_port_info {
+@@ -247,12 +251,29 @@ static int synopsys_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where, int
+ 		pcieconf_base = (void __iomem *)((u32)pp->pciegen3_base1 + where);
+ 		debugFlag = 1;
+ 	}
++#if 1	/* Workaround_20160609 */
++	if ( Workaround_20160609 && (debugFlag == 0) && (size == 2) ) {
++		if ( where == 0xcc ){
++			*val = 0x2000;
++		}else{
++			*val = synopsys_readw(pcieconf_base);
++		}
++	} else {
++		if (size == 1)
++			*val = synopsys_readb(pcieconf_base);
++		else if (size == 2)
++			*val = synopsys_readw(pcieconf_base);
++		else
++			*val = synopsys_readl(pcieconf_base);
++	}
++#else
+ 	if (size == 1)
+ 		*val = synopsys_readb(pcieconf_base);
+ 	else if (size == 2)
+ 		*val = synopsys_readw(pcieconf_base);
+ 	else
+ 		*val = synopsys_readl(pcieconf_base);
++#endif
+ //	dev_err(pp->dev, " 0x%8.8lx : 0x%8.8lx\n", pcieconf_base, val);
+ //out:
+ 	if(debugFlag == 1){
+@@ -725,11 +746,10 @@ static int synopsys_pcie_establish_link(struct pcie_port *pp)
+ 	
+ 	/* Use on-chip reference clock (PHY_REF_ALT_CLK) */
+ 	val  = synopsys_readl(pciewrap_base + PCIE_PHY_CLK_CTRL);
+-#if 1	/* A0/B0 Change */
+-	val |= PCIE_PHY_CLK_CTRL__PHY_REF_USE_PAD__MASK;
+-#else
+-	val &= ~PCIE_PHY_CLK_CTRL__PHY_REF_USE_PAD__MASK;
+-#endif
++	if ( lm2_board_is_A0() )
++		val &= ~PCIE_PHY_CLK_CTRL__PHY_REF_USE_PAD__MASK;
++	else
++		val |= PCIE_PHY_CLK_CTRL__PHY_REF_USE_PAD__MASK;
+ 	synopsys_writel(pciewrap_base + PCIE_PHY_CLK_CTRL, val);
+ 
+ 	/* Enable clock for Endpoint 1, but not the unused endpoints */
+-- 
+1.7.1
+

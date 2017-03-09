@@ -1,0 +1,168 @@
+From 53b139fc1122c454f84589587106807e6c11d9bf Mon Sep 17 00:00:00 2001
+From: wrlinux6012 <wrlinux6012@tok-svnsvr2.corp.ad.wrs.com>
+Date: Thu, 25 Feb 2016 17:26:14 +0900
+Subject: [PATCH 3/4] PT_P3_0005-workaround-kmap-preempt_rebase
+
+
+diff --git a/arch/arm/include/asm/fixmap.h b/arch/arm/include/asm/fixmap.h
+index cb50cee..39b6365 100644
+--- a/arch/arm/include/asm/fixmap.h
++++ b/arch/arm/include/asm/fixmap.h
+@@ -1,11 +1,24 @@
+ #ifndef _ASM_FIXMAP_H
+ #define _ASM_FIXMAP_H
+ 
+-#define FIXADDR_START		0xffc00000UL
+-#define FIXADDR_TOP		0xfff00000UL
++/*
++ * Nothing too fancy for now.
++ *
++ * On ARM we already have well known fixed virtual addresses imposed by
++ * the architecture such as the vector page which is located at 0xffff0000,
++ * therefore a second level page table is already allocated covering
++ * 0xfff00000 upwards.
++ *
++ * The cache flushing code in proc-xscale.S uses the virtual area between
++ * 0xfffe0000 and 0xfffeffff.
++*/
++
++#define FIXADDR_START          0xfff00000UL
++#define FIXADDR_TOP            0xfffe0000UL
+ #define FIXADDR_SIZE		(FIXADDR_TOP - FIXADDR_START)
+ 
+-#define FIX_KMAP_NR_PTES	(FIXADDR_SIZE >> PAGE_SHIFT)
++#define FIX_KMAP_BEGIN         0
++#define FIX_KMAP_END           (FIXADDR_SIZE >> PAGE_SHIFT)
+ 
+ #define __fix_to_virt(x)	(FIXADDR_START + ((x) << PAGE_SHIFT))
+ #define __virt_to_fix(x)	(((x) - FIXADDR_START) >> PAGE_SHIFT)
+@@ -14,7 +27,7 @@ extern void __this_fixmap_does_not_exist(void);
+ 
+ static inline unsigned long fix_to_virt(const unsigned int idx)
+ {
+-	if (idx >= FIX_KMAP_NR_PTES)
++	if (idx >= FIX_KMAP_END)
+ 		__this_fixmap_does_not_exist();
+ 	return __fix_to_virt(idx);
+ }
+diff --git a/arch/arm/mm/highmem.c b/arch/arm/mm/highmem.c
+index 93a0341..b26f462 100644
+--- a/arch/arm/mm/highmem.c
++++ b/arch/arm/mm/highmem.c
+@@ -18,23 +18,6 @@
+ #include <asm/tlbflush.h>
+ #include "mm.h"
+ 
+-
+-static inline void set_fixmap_pte(int idx, pte_t pte)
+-{
+-	unsigned long vaddr = __fix_to_virt(idx);
+-	pte_t *ptep = pte_offset_kernel(pmd_off_k(vaddr), vaddr);
+-
+-	set_pte_ext(ptep, pte, 0);
+-	local_flush_tlb_kernel_page(vaddr);
+-}
+-
+-static inline pte_t get_fixmap_pte(unsigned long vaddr)
+-{
+-	pte_t *ptep = pte_offset_kernel(pmd_off_k(vaddr), vaddr);
+-
+-	return *ptep;
+-}
+-
+ void *kmap(struct page *page)
+ {
+ 	might_sleep();
+@@ -81,13 +64,13 @@ void *kmap_atomic(struct page *page)
+ 	type = kmap_atomic_idx_push();
+ 
+ 	idx = type + KM_TYPE_NR * smp_processor_id();
+-	vaddr = __fix_to_virt(idx);
++	vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
+ #ifdef CONFIG_DEBUG_HIGHMEM
+ 	/*
+ 	 * With debugging enabled, kunmap_atomic forces that entry to 0.
+ 	 * Make sure it was indeed properly unmapped.
+ 	 */
+-	BUG_ON(!pte_none(get_fixmap_pte(vaddr)));
++	BUG_ON(!pte_none(get_top_pte(vaddr)));
+ #endif
+ 	/*
+ 	 * When debugging is off, kunmap_atomic leaves the previous mapping
+@@ -97,7 +80,7 @@ void *kmap_atomic(struct page *page)
+ #ifdef CONFIG_PREEMPT_RT_FULL
+ 	current->kmap_pte[type] = pte;
+ #endif
+-	set_fixmap_pte(idx, pte);
++	set_top_pte(vaddr, mk_pte(page, kmap_prot));
+ 
+ 	return (void *)vaddr;
+ }
+@@ -122,7 +105,7 @@ void __kunmap_atomic(void *kvaddr)
+ #else
+ 		(void) idx;  /* to kill a warning */
+ #endif
+-		set_fixmap_pte(idx, __pte(0));
++		set_top_pte(vaddr, __pte(0));
+ 		kmap_atomic_idx_pop();
+ 	} else if (vaddr >= PKMAP_ADDR(0) && vaddr < PKMAP_ADDR(LAST_PKMAP)) {
+ 		/* this address was obtained through kmap_high_get() */
+@@ -142,14 +125,14 @@ void *kmap_atomic_pfn(unsigned long pfn)
+ 
+ 	type = kmap_atomic_idx_push();
+ 	idx = type + KM_TYPE_NR * smp_processor_id();
+-	vaddr = __fix_to_virt(idx);
++	vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
+ #ifdef CONFIG_DEBUG_HIGHMEM
+-	BUG_ON(!pte_none(get_fixmap_pte(vaddr)));
++	BUG_ON(!pte_none(get_top_pte(vaddr)));
+ #endif
+ #ifdef CONFIG_PREEMPT_RT_FULL
+ 	current->kmap_pte[type] = pte;
+ #endif
+-	set_fixmap_pte(idx, pte);
++	set_top_pte(vaddr, pfn_pte(pfn, kmap_prot));
+ 
+ 	return (void *)vaddr;
+ }
+@@ -161,30 +144,33 @@ struct page *kmap_atomic_to_page(const void *ptr)
+ 	if (vaddr < FIXADDR_START)
+ 		return virt_to_page(ptr);
+ 
+-	return pte_page(get_fixmap_pte(vaddr));
++	return pte_page(get_top_pte(vaddr));
+ }
+ 
+ #if defined CONFIG_PREEMPT_RT_FULL
+ void switch_kmaps(struct task_struct *prev_p, struct task_struct *next_p)
+ {
+ 	int i;
+-
++	unsigned long vaddr;
+ 	/*
+ 	 * Clear @prev's kmap_atomic mappings
+ 	 */
+ 	for (i = 0; i < prev_p->kmap_idx; i++) {
+ 		int idx = i + KM_TYPE_NR * smp_processor_id();
+ 
+-		set_fixmap_pte(idx, __pte(0));
++		vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
++		set_top_pte(vaddr, __pte(0));
++
+ 	}
+ 	/*
+ 	 * Restore @next_p's kmap_atomic mappings
+ 	 */
+ 	for (i = 0; i < next_p->kmap_idx; i++) {
+ 		int idx = i + KM_TYPE_NR * smp_processor_id();
++		vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
+ 
+ 		if (!pte_none(next_p->kmap_pte[i]))
+-			set_fixmap_pte(idx, next_p->kmap_pte[i]);
++			set_top_pte(vaddr, next_p->kmap_pte[i]);
+ 	}
+ }
+ #endif
+-- 
+1.7.1
+

@@ -1,0 +1,17 @@
+define KMACHINE fxcl-clipper-s72
+define KTYPE preempt-rt
+define KARCH arm
+include ktypes/preempt-rt
+
+kconf hardware fxcl-clipper-s72.cfg
+
+patch 0001-S72-common-base.patch
+patch 0001-S72-preempt-base.patch
+patch 0002-fix-build-error.patch
+patch 0003-New-build-error.patch
+patch 0004-implement-of_i2c.patch
+patch 0005-workaround-kmap-preempt.patch
+#patch 0006-fix-build-error-preempt.patch
+#patch 0039-preempt_random_RCPL0027Update.patch
+
+include fxcl-clipper-s72.scc

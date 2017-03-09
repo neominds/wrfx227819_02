@@ -1,0 +1,38 @@
+From 486ee5c3ec6a9d4d1a848a7f660e65d0877d89e5 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Wed, 11 May 2016 11:34:11 +0900
+Subject: [PATCH 058/170] fixed-kernel-config
+
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index ba9e4e5..350fec5 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -109,6 +109,12 @@ config HAVE_PWM
+ config MIGHT_HAVE_PCI
+ 	bool
+ 
++config PCIEPORTBUS
++	bool
++
++config PCIE_LM2
++	bool
++
+ config SYS_SUPPORTS_APM_EMULATION
+ 	bool
+ 
+diff --git a/arch/arm/Kconfig.orig b/arch/arm/Kconfig.orig
+index da9702d..69dab8f 100644
+--- a/arch/arm/Kconfig.orig
++++ b/arch/arm/Kconfig.orig
+@@ -372,6 +372,7 @@ config ARCH_LM2
+         select GENERIC_CLOCKEVENTS
+         select HAVE_CLK
+         select HAVE_PATA_PLATFORM
++	select MIGHT_HAVE_PCI
+         select ICST
+         select NO_IOPORT
+         select PLAT_WAIKIKI
+-- 
+1.7.1
+

@@ -1,0 +1,629 @@
+From 6481a748ed065a07b1c17279b18809a667e05c69 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Thu, 17 Mar 2016 12:58:06 +0900
+Subject: [PATCH 1/1] hibernation_support_beta
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ arch/arm/boot/compressed/atags_to_fdt.c |   22 ++--
+ arch/arm/boot/dts/mb86s72eb.dts         |    1 +
+ arch/arm/mach-mb86s70/hibernate_setup.c |  221 ++++++++++++++++++++++++++++++-
+ include/linux/suspend.h                 |    4 +-
+ kernel/power/hibernate.c                |   55 ++++----
+ kernel/power/swap.c                     |   72 ++++++-----
+ 6 files changed, 292 insertions(+), 83 deletions(-)
+
+diff --git a/arch/arm/boot/compressed/atags_to_fdt.c b/arch/arm/boot/compressed/atags_to_fdt.c
+index 8621b4f..61499ea 100644
+--- a/arch/arm/boot/compressed/atags_to_fdt.c
++++ b/arch/arm/boot/compressed/atags_to_fdt.c
+@@ -155,19 +155,12 @@ static int replace_startup(void *fdt, int total_space)
+ static int replace_enc(void *fdt, int total_space)
+ {
+ 	struct panbug_param	*p_ptr = (struct panbug_param *)PARAM_ADDR;
+-	unsigned char   tmp_buf[ENC_BUFF];
+-	int len,rtn;
++	int rtn;
+ 
+ 	if ( p_ptr->magic != 0x12345678 )
+ 		return 0;
+ 
+-	len = strlen(p_ptr->enc);
+-	if ( len == 0 )
+-		return 0;
+-
+-	memset(tmp_buf, 0, ENC_BUFF);
+-	memcpy(tmp_buf,p_ptr->enc, len);
+-	rtn = setprop_inplace(fdt, "/set_panbug", "enc-key", tmp_buf, ENC_BUFF);
++	rtn = setprop_inplace(fdt, "/set_panbug", "enc-key", p_ptr->enc, ENC_BUFF);
+ 	if ( rtn ) {
+ 		return 0;
+ 	}
+@@ -189,15 +182,20 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
+ 	uint32_t mem_reg_property[2 * 2 * NR_BANKS];
+ 	int memcount = 0;
+ 	int ret, memsize;
++#ifdef	CONFIG_ARCH_MB86S70
++	int res[2];
++#endif	/* CONFIG_ARCH_MB86S70 */
+ 
+ 	/* make sure we've got an aligned pointer */
+ 	if ((u32)atag_list & 0x3)
+ 		return 1;
+ 
+ #ifdef	CONFIG_ARCH_MB86S70
+-	if(replace_startup(fdt, total_space)) {
+-		if(replace_enc(fdt, total_space))
+-			return 1;
++	res[0] = replace_startup(fdt, total_space);
++	res[1] = replace_enc(fdt, total_space);
++
++	if( res[0] ==1 || res[1] ==1) {
++		return 1;
+ 	}
+ #endif	/* CONFIG_ARCH_MB86S70 */
+ 	/* if we get a DTB here we're done already */
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 694f8ac..15e1685 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -34,6 +34,7 @@
+ 		/*start-up   = [ 2f 64 65 76 2f 6d 6d 63 62 6c 6b 30 70 32 ];*/	/* /dev/mmcblk0p2 */
+ 		/*start-up   = [ 2f 64 65 76 2f 73 64 61 32 ];*/ 			/* /dev/sda2      */
+ 		start-up = [ 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ];		/* 16Byte(max)   */
++		/*enc-key  = [ 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f ];*/	/* 16Byte(must)  */
+ 		enc-key  = [ 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ];		/* 16Byte(must)  */
+         };
+ 
+diff --git a/arch/arm/mach-mb86s70/hibernate_setup.c b/arch/arm/mach-mb86s70/hibernate_setup.c
+index f8ad08f..2f97ca8 100644
+--- a/arch/arm/mach-mb86s70/hibernate_setup.c
++++ b/arch/arm/mach-mb86s70/hibernate_setup.c
+@@ -6,12 +6,20 @@
+ #include <linux/reboot.h>
+ #include <linux/module.h>
+ #include <asm/io.h>
++#include <linux/crypto.h>
++#include <linux/scatterlist.h>
++#include <linux/err.h>
+ 
+ #undef	HIBERNATION_SETUP_TRACE
++#undef	LZO_ENC_TEST
++#define AES_KEY_LEN     16
++
++int lzo_encrypt(void *dst, void *src, size_t len);
++int lzo_decrypt(void *dst, void *src, size_t len);
++static int enc_flag=0;
+ 
+-#ifdef CONFIG_HIBERNATION
+-extern int mb86s70_dpm_suspend(char* name);
+ 
++#ifdef CONFIG_HIBERNATION
+ static int mb86s70_hibernate_begin(void)
+ {
+ #ifdef	HIBERNATION_SETUP_TRACE
+@@ -77,20 +85,219 @@ static void mb86s70_hibernate_recover(void)
+ 	printk(KERN_ERR "*****%s:\n",__func__);
+ #endif
+ }
+-static int mb86s70_hibernate_encryption(void)
++
++#ifdef	LZO_ENC_TEST
++#define BUF_SIZE        PAGE_SIZE
++void print_hex(unsigned char *buf, int start, int len)
++{
++        int i;
++        for (i = start; i < (start+len); i+=16) {
++                printk(KERN_ERR "%03x: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n", i,
++				buf[i+0],buf[i+1],buf[i+2],buf[i+3],buf[i+4],buf[i+5],buf[i+6],buf[i+7],
++				buf[i+8],buf[i+9],buf[i+10],buf[i+11],buf[i+12],buf[i+13],buf[i+14],buf[i+15]);
++	}
++}
++static int lzo_enctest(void)
++{
++	int	i,j;
++	char *src;
++	char *tmp;
++	char *dst;
++	int srclen = PAGE_SIZE;
++	int tmplen;
++	int dstlen;
++
++printk(KERN_ERR "*****%s: Start(BUF_SIZE=%d)\n",__func__, BUF_SIZE);
++	src = kmalloc(BUF_SIZE, __GFP_ZERO|GFP_KERNEL);
++        if (!src) {
++		printk(KERN_ERR "%s: src kmalloc ERROR\n",__func__);
++                return -1;
++        }
++	tmp = kmalloc(BUF_SIZE, __GFP_ZERO|GFP_KERNEL);
++        if (!tmp) {
++		printk(KERN_ERR "%s: tmp kmalloc ERROR\n",__func__);
++                return -1;
++        }
++	dst = kmalloc(BUF_SIZE, __GFP_ZERO|GFP_KERNEL);
++        if (!dst) {
++		printk(KERN_ERR "%s: dst kmalloc ERROR\n",__func__);
++                return -1;
++        }
++	srclen = tmplen = dstlen = BUF_SIZE;
++
++	for (i=0; i<3; i++) {
++		memset(src, 0x37+i, BUF_SIZE);
++		memset(tmp, 0xff, BUF_SIZE);
++		memset(dst, 0xff, BUF_SIZE);
++
++		printk(KERN_ERR "*****%s: %d encrypt srclen=%d tmplen=%d\n",__func__, i, srclen, tmplen);
++		print_hex(src, 0, 32);
++		print_hex(src, 4064, 32);
++		lzo_encrypt(tmp, src, srclen);
++		print_hex(tmp, 0, 32);
++		print_hex(tmp, 4064, 32);
++		printk(KERN_ERR "*****%s: decrypt tmplen=%d dstlen=%d\n",__func__, tmplen, dstlen);
++		lzo_decrypt(dst, tmp, tmplen);
++		print_hex(dst, 0, 32);
++		print_hex(dst, 4064, 32);
++
++		for(j=0;j<srclen;j++) {
++			if ( src[j] != dst[j] )
++				break;
++		}
++		if ( j == srclen )
++			printk(KERN_ERR "*****%s: cmp ok\n",__func__);
++		else
++			printk(KERN_ERR "*****%s: cmp ng\n",__func__);
++	}
++
++
++	kfree(src);
++	kfree(tmp);
++	kfree(dst);
++printk(KERN_ERR "*****%s: End\n",__func__);
++        return 0;
++}
++#endif	/* LZO_ENC_TEST */
++
++struct crypto_blkcipher *ctr_crypto_alloc_cipher(void)
+ {
++	return crypto_alloc_blkcipher("ecb(arc4)"       , 0, CRYPTO_ALG_ASYNC);
++}
++
++static int mb86s70_hibernate_enc_setup(void)
++{
++	char	*key = get_panbug_key();
++	int	i;
++
+ #ifdef	HIBERNATION_SETUP_TRACE
+ 	printk(KERN_ERR "*****%s:\n",__func__);
+ #endif
++	for(i=0; i<16; i++){
++		if ( key[i] != 0 )
++			break;
++	}
++	if ( i == 16 ) {
++		enc_flag=0;
++		printk(KERN_ERR "++%s: key not found\n",__func__);
++		return 0;
++	}
++	enc_flag=1;
++#ifdef	HIBERNATION_SETUP_TRACE
++printk(KERN_ERR "*****%s: key=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",__func__,
++                key[0],key[1],key[2],key[3],key[4],key[5],key[6],key[7],
++                key[8],key[9],key[10],key[11],key[12],key[13],key[14],key[15]);
++	printk(KERN_ERR "*****%s: enc_flag=%d\n",__func__, enc_flag);
++#endif
++#ifdef  LZO_ENC_TEST
++        lzo_enctest();
++#endif
++#ifdef	HIBERNATION_SETUP_TRACE
++printk(KERN_ERR "*****%s: End\n",__func__);
++#endif
+ 	return 0;
+ }
+-static int mb86s70_hibernate_composite(void)
++
++int lzo_encrypt(void *dst, void *src, size_t len)
+ {
++	struct crypto_blkcipher *tfm;
++	struct blkcipher_desc desc;
++	struct scatterlist sg_in[1], sg_out[1];
++	char	*key = get_panbug_key();
++	char 	aes_iv[AES_KEY_LEN];
++	int ivsize;
++	int ret;
++	size_t	length = len;
++	if ( !enc_flag  ) {
++		memcpy(dst, src, length);
++		return 0;
++	}
++
++	tfm = ctr_crypto_alloc_cipher();
++	if (IS_ERR(tfm)) {
++		printk(KERN_ERR "%s: failed to load transform for arc4 : %ld\n",__func__, PTR_ERR(tfm));
++		return PTR_ERR(tfm);
++	}
++	desc.tfm   = tfm;
++	desc.flags = 0;
++
++	ret = crypto_blkcipher_setkey((void *)tfm, key, 16);
++	if(ret){
++		printk(KERN_ERR "setkey() failed flags=%x\n",crypto_blkcipher_get_flags(tfm));
++		return -1;
++	}
+ #ifdef	HIBERNATION_SETUP_TRACE
+-	printk(KERN_ERR "*****%s:\n",__func__);
++printk(KERN_ERR "*****%s: Start\n",__func__);
++#endif
++	sg_init_table(sg_in,  1);
++	sg_set_buf(&sg_in[0], src, length);
++
++	sg_init_table(sg_out, 1);
++	sg_set_buf(&sg_out[0], dst, length);
++
++	memset(aes_iv, 0x11, AES_KEY_LEN);
++	ivsize = crypto_blkcipher_ivsize(tfm);
++	crypto_blkcipher_set_iv(tfm, aes_iv, ivsize);
++
++	ret = crypto_blkcipher_encrypt(&desc, sg_out, sg_in, length);
++//	if(ret){
++//		printk(KERN_ERR "encrypt failed %d\n",ret);
++//	}
++	crypto_free_blkcipher(tfm);
++#ifdef	HIBERNATION_SETUP_TRACE
++printk(KERN_ERR "*****%s: End\n",__func__);
+ #endif
+ 	return 0;
+ }
++EXPORT_SYMBOL_GPL(lzo_encrypt);
++int lzo_decrypt(void *dst, void *src, size_t len)
++{
++	struct crypto_blkcipher *tfm;
++	struct blkcipher_desc desc;
++	struct scatterlist sg_in[1], sg_out[1];
++	char	*key = get_panbug_key();
++	char 	aes_iv[AES_KEY_LEN];
++	int ivsize;
++	int ret;
++	size_t	length = len;
++	if ( !enc_flag  ) {
++		memcpy(dst, src, length);
++		return 0;
++	}
++
++	tfm = ctr_crypto_alloc_cipher();
++	if (IS_ERR(tfm)) {
++		printk(KERN_ERR "%s: failed to load transform for arc4 : %ld\n",__func__, PTR_ERR(tfm));
++		return PTR_ERR(tfm);
++	}
++	desc.tfm   = tfm;
++//	desc.flags = 0;
++
++	ret = crypto_blkcipher_setkey((void *)tfm, key, 16);
++	if(ret){
++		printk(KERN_ERR "setkey() failed flags=%x\n",crypto_blkcipher_get_flags(tfm));
++		return -1;
++	}
++	sg_init_table(sg_in, 1);
++	sg_set_buf(&sg_in[0], src, length);
++
++	sg_init_table(sg_out, 1);
++	sg_set_buf(&sg_out[0], dst, length);
++
++	memset(aes_iv, 0x11, AES_KEY_LEN);
++	ivsize = crypto_blkcipher_ivsize(tfm);
++	crypto_blkcipher_set_iv(tfm, aes_iv, ivsize);
++
++	ret= crypto_blkcipher_decrypt(&desc, sg_out, sg_in, length);
++//	if (ret < 0) {
++//		printk(KERN_ERR "decrypt failed %d\n", ret);
++//		return ret;
++//	}
++
++	crypto_free_blkcipher(tfm);
++	return 0;
++}
++EXPORT_SYMBOL_GPL(lzo_decrypt);
+ static const struct platform_hibernation_ops mb86s70_hibernate_ops = {
+         .begin           = mb86s70_hibernate_begin,
+         .end             = mb86s70_hibernate_end,
+@@ -102,13 +309,13 @@ static const struct platform_hibernation_ops mb86s70_hibernate_ops = {
+         .pre_restore     = mb86s70_hibernate_pre_restore,
+         .restore_cleanup = mb86s70_hibernate_restore_cleanup,
+         .recover         = mb86s70_hibernate_recover,
+-	.encryption	 = mb86s70_hibernate_encryption,
+-	.composite	 = mb86s70_hibernate_composite,
++	.enc_setup	 = mb86s70_hibernate_enc_setup,
+ };
+ 
+ int __init	mb86s70_hibernate_init(void)
+ {
+ 	hibernation_set_ops(&mb86s70_hibernate_ops);
++	return 0;
+ }
+ subsys_initcall(mb86s70_hibernate_init);
+ #endif	/* CONFIG_HIBERNATION */
+diff --git a/include/linux/suspend.h b/include/linux/suspend.h
+index e2067d0..7542792 100644
+--- a/include/linux/suspend.h
++++ b/include/linux/suspend.h
+@@ -300,8 +300,7 @@ struct platform_hibernation_ops {
+ 	void (*restore_cleanup)(void);
+ 	void (*recover)(void);
+ #if 1	/* WR add */
+-	int (*encryption)(void);
+-	int (*composite)(void);
++	int (*enc_setup)(void);
+ #endif	/* WR add */
+ };
+ 
+@@ -328,6 +327,7 @@ extern bool system_entering_hibernation(void);
+ extern int is_hibernation_flag(void);
+ extern int is_suspend_bypass(void);
+ extern void suspend_set(void);
++extern char* get_panbug_key(void);
+ #endif	/* WR add */
+ #else /* CONFIG_HIBERNATION */
+ static inline void register_nosave_region(unsigned long b, unsigned long e) {}
+diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
+index 5582a30..8a5175f 100644
+--- a/kernel/power/hibernate.c
++++ b/kernel/power/hibernate.c
+@@ -40,6 +40,7 @@ static int noresume;
+ static int resume_wait;
+ static int resume_delay;
+ static char resume_file[256] = CONFIG_PM_STD_PARTITION;
++const char *enckey = NULL;
+ dev_t swsusp_resume_device;
+ sector_t swsusp_resume_block;
+ int in_suspend __nosavedata;
+@@ -225,16 +226,10 @@ static void platform_recover(int platform_mode)
+ }
+ 
+ #if 1	/* WR ADD */
+-static int platform_encryption(int platform_mode)
++static int platform_enc_setup(int platform_mode)
+ {
+-	if (platform_mode && hibernation_ops && hibernation_ops->encryption)
+-		return hibernation_ops->encryption();
+-	return 0;
+-}
+-static int platform_composite(int platform_mode)
+-{
+-	if (platform_mode && hibernation_ops && hibernation_ops->composite)
+-		return hibernation_ops->composite();
++	if (platform_mode && hibernation_ops && hibernation_ops->enc_setup)
++		return hibernation_ops->enc_setup();
+ 	return 0;
+ }
+ #endif	/* WR ADD */
+@@ -837,13 +832,6 @@ int hibernate(void)
+ #ifdef	HIBERNATE_TRACE
+ 		printk(KERN_ERR "++%s: swsusp_write End\n",__func__);
+ #endif
+-#if 1	/* WR ADD */
+-		error = platform_encryption(hibernation_mode == HIBERNATION_PLATFORM);
+-        	if (error){
+-			printk(KERN_ERR "++%s: platform_encryption Erros\n",__func__);
+-                	goto Thaw;
+-		}
+-#endif	/* WR ADD */
+ 		swsusp_free();
+ 		if (!error)
+ #ifdef	HIBERNATE_TRACE
+@@ -899,15 +887,21 @@ static int software_resume(void)
+ 	int error;
+ 	unsigned int flags;
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Start(noresume=%d)\n",__func__,noresume);
++#endif
++#if 1	/* WR ADD */
++	error = platform_enc_setup(1);
++	if ( error ){
++		printk(KERN_ERR "++%s: platform_enc_setup Erros\n", __func__);
++	}
++#endif	/* WR ADD */
+ 	/*
+ 	 * If the user said "noresume".. bail out early.
+ 	 */
+ 	if (noresume)
+ 		return 0;
+ 
+-#ifdef	HIBERNATE_TRACE
+-printk(KERN_ERR "++%s: Start\n",__func__);
+-#endif
+ 	/*
+ 	 * name_to_dev_t() below takes a sysfs buffer mutex when sysfs
+ 	 * is configured into the kernel. Since the regular hibernate
+@@ -973,12 +967,6 @@ printk(KERN_ERR "++%s: Checking hibernation image partition %s\n", __func__, res
+ 	}
+ 
+  Check_image:
+-#if 1	/* WR ADD */
+-	error = platform_composite(1);
+-	if ( error ){
+-		printk(KERN_ERR "++%s: platform_composite Erros\n", __func__);
+-	}
+-#endif	/* WR ADD */
+ 
+ #ifdef	HIBERNATE_TRACE
+ printk(KERN_ERR "++%s: Hibernation image partition %d:%d present\n", __func__, MAJOR(swsusp_resume_device), MINOR(swsusp_resume_device));
+@@ -1078,7 +1066,6 @@ static int __init atag_parse(void)
+ 	struct device_node      *node;
+ 	struct property *pp;
+ 	const char *startup;
+-	const char *enckey;
+ 	int	len;
+ #ifdef  HIBERNATE_TRACE
+ printk(KERN_ERR "++%s: Start\n",__func__);
+@@ -1108,12 +1095,14 @@ printk(KERN_ERR "++%s: Start\n",__func__);
+ 	} else {
+ 		printk(KERN_ERR "atag_parse(set_panbug) error\n");
+ 	}
+-//#ifdef  HIBERNATE_TRACE
++
+ #if 1	/* for debug */
+ printk(KERN_ERR "++%s:\n",__func__);
+-printk(KERN_ERR "++%s: End(startup=%s enckey=%s resume_delay=%d)\n",__func__, resume_file, enckey, resume_delay);
+-printk(KERN_ERR "++%s:\n",__func__);
+-#endif
++printk(KERN_ERR "++%s: startup=%s resume_delay=%d\n",__func__, resume_file, resume_delay);
++printk(KERN_ERR "++%s: enckey=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",__func__,
++		enckey[0],enckey[1],enckey[2],enckey[3],enckey[4],enckey[5],enckey[6],enckey[7],
++		enckey[8],enckey[9],enckey[10],enckey[11],enckey[12],enckey[13],enckey[14],enckey[15]);
++#endif	/* for debug */
+ 	return 0;
+ }
+ subsys_initcall(atag_parse);
+@@ -1138,6 +1127,12 @@ void suspend_set(void)
+ 	hibernation_startup = 2;
+ }
+ EXPORT_SYMBOL_GPL(suspend_set);
++
++char* get_panbug_key(void)
++{
++	return enckey;
++}
++EXPORT_SYMBOL_GPL(get_panbug_key);
+ #endif
+ 
+ static const char * const hibernation_modes[] = {
+diff --git a/kernel/power/swap.c b/kernel/power/swap.c
+index 20a41e7..ea4099f 100644
+--- a/kernel/power/swap.c
++++ b/kernel/power/swap.c
+@@ -31,13 +31,19 @@
+ #include <linux/kthread.h>
+ #include <linux/crc32.h>
+ #include <linux/crypto.h>
++#include <linux/scatterlist.h>
+ 
+ #include "power.h"
+ 
+ #define HIBERNATE_SIG	"S1SUSPEND"
+ 
+-#define	LZO_ENC
+ #undef	SWAP_TRACE
++#define	WR_ENC
++
++#ifdef	WR_ENC
++extern int lzo_encrypt(void *dst, void *src, size_t len);
++extern int lzo_decrypt(void *dst, void *src, size_t len);
++#endif	/* WR_ENC */
+ /*
+  *	The swap map is a data structure used for keeping track of each page
+  *	written to a swap partition.  It consists of many swap_map_page
+@@ -52,36 +58,8 @@
+  *	During resume we pick up all swap_map_page structures into a list.
+  */
+ 
+-#define MAP_PAGE_ENTRIES	(PAGE_SIZE / sizeof(sector_t) - 1)
+-
+-#ifdef	LZO_ENC
+-unsigned char key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+-int klen = 16;
+-//static inline void sg_set_buf(struct scatterlist *sg, void *buf, unsigned int buflen)
+-//{
+-//	sg->page = virt_to_page(buf);
+-//	sg->offset = offset_in_page(buf);
+-//	sg->length = buflen;
+-//}
+-static int lzo_enc_init(void)
+-{
+-	struct crypto_tfm*	tfm;
+-	int			ret=0;
+-
+-//	tfm = crypto_alloc_tfm("aes", 0);
+-//	if (!tfm)
+-//		return -ENOMEM;
+-//
+-//	ret = crypto_cipher_setkey(tfm, key, klen);
+-//	if (ret) 
+-//		goto out;
+-//
+-//out:
+-//	crypto_free_tfm(tfm);
+-	return ret;
++#define MAP_PAGE_ENTRIES        (PAGE_SIZE / sizeof(sector_t) - 1)
+ 
+-}
+-#endif
+ /*
+  * Number of free pages that are not high.
+  */
+@@ -633,6 +611,9 @@ printk(KERN_ERR "**%s: Start\n",__func__);
+ 	nr_threads = num_online_cpus() - 1;
+ 	nr_threads = clamp_val(nr_threads, 1, LZO_THREADS);
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: nr_threads=%d\n",__func__, nr_threads);
++#endif
+ 	page = (void *)__get_free_page(__GFP_WAIT | __GFP_HIGH);
+ 	if (!page) {
+ 		printk(KERN_ERR "PM: Failed to allocate LZO page\n");
+@@ -723,8 +704,7 @@ printk(KERN_ERR "**%s: Start\n",__func__);
+ 				if (!ret)
+ 					break;
+ 
+-				memcpy(data[thr].unc + off,
+-				       data_of(*snapshot), PAGE_SIZE);
++				memcpy(data[thr].unc + off, data_of(*snapshot), PAGE_SIZE);
+ 
+ 				if (!(nr_pages % m))
+ 					printk(KERN_INFO
+@@ -783,7 +763,11 @@ printk(KERN_ERR "**%s: Start\n",__func__);
+ 			for (off = 0;
+ 			     off < LZO_HEADER + data[thr].cmp_len;
+ 			     off += PAGE_SIZE) {
++#ifdef	WR_ENC
++				lzo_encrypt(page, data[thr].cmp + off, PAGE_SIZE);
++#else	/* WR_ENC */
+ 				memcpy(page, data[thr].cmp + off, PAGE_SIZE);
++#endif	/* WR_ENC */
+ 
+ 				ret = swap_write_page(handle, page, &bio);
+ 				if (ret)
+@@ -1291,7 +1275,19 @@ printk(KERN_ERR "**%s: Start\n",__func__);
+ 		}
+ 
+ 		for (thr = 0; have && thr < nr_threads; thr++) {
++#ifdef	WR_ENC
++			unsigned char *tmp = (unsigned char *)kmalloc(PAGE_SIZE, __GFP_ZERO|GFP_KERNEL);
++			if (!tmp) {
++				printk(KERN_ERR "PM:ENC to allocate page\n");
++				ret = -ENOMEM;
++				goto out_clean;
++			}
++			lzo_decrypt(tmp, page[pg], PAGE_SIZE);
++			data[thr].cmp_len = *(size_t *)tmp;
++			kfree(tmp);
++#else	/* WR_ENC */
+ 			data[thr].cmp_len = *(size_t *)page[pg];
++#endif	/* WR_ENC */
+ 			if (unlikely(!data[thr].cmp_len ||
+ 			             data[thr].cmp_len >
+ 			             lzo1x_worst_compress(LZO_UNC_SIZE))) {
+@@ -1314,8 +1310,20 @@ printk(KERN_ERR "**%s: Start\n",__func__);
+ 			for (off = 0;
+ 			     off < LZO_HEADER + data[thr].cmp_len;
+ 			     off += PAGE_SIZE) {
++#ifdef	WR_ENC
++				unsigned char *tmp = (unsigned char *)kmalloc(PAGE_SIZE, __GFP_ZERO|GFP_KERNEL);
++				if (!tmp) {
++					printk(KERN_ERR "PM:ENC to allocate page\n");
++					ret = -ENOMEM;
++					goto out_clean;
++				}
++				lzo_decrypt(tmp, page[pg], PAGE_SIZE);
++				memcpy(data[thr].cmp + off, tmp, PAGE_SIZE);
++				kfree(tmp);
++#else	/* WR_ENC */
+ 				memcpy(data[thr].cmp + off,
+ 				       page[pg], PAGE_SIZE);
++#endif	/* WR_ENC */
+ 				have--;
+ 				want++;
+ 				if (++pg >= ring_size)
+-- 
+1.7.1
+

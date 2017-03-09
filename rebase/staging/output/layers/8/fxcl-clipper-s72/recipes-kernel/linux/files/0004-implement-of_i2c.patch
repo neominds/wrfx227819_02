@@ -1,0 +1,241 @@
+From 820e0bccaf2e86af429dccf5b72b49d9162e3560 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:22 +0000
+Subject: [PATCH 05/34] 0004-implement-of_i2c
+
+
+diff --git a/drivers/i2c/i2c-core.c b/drivers/i2c/i2c-core.c
+index f9def1f..4479df3 100644
+--- a/drivers/i2c/i2c-core.c
++++ b/drivers/i2c/i2c-core.c
+@@ -671,7 +671,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
+ 	client->dev.bus = &i2c_bus_type;
+ 	client->dev.type = &i2c_client_type;
+ 	client->dev.of_node = info->of_node;
+-	ACPI_COMPANION_SET(&client->dev, info->acpi_node.companion);
++	ACPI_HANDLE_SET(&client->dev, info->acpi_node.handle);
+ 
+ 	/* For 10-bit clients, add an arbitrary offset to avoid collisions */
+ 	dev_set_name(&client->dev, "%d-%04x", i2c_adapter_id(adap),
+@@ -1026,34 +1026,6 @@ static int of_dev_node_match(struct device *dev, void *data)
+ {
+ 	return dev->of_node == data;
+ }
+-
+-/* must call put_device() when done with returned i2c_client device */
+-struct i2c_client *of_find_i2c_device_by_node(struct device_node *node)
+-{
+-	struct device *dev;
+-
+-	dev = bus_find_device(&i2c_bus_type, NULL, node,
+-					 of_dev_node_match);
+-	if (!dev)
+-		return NULL;
+-
+-	return i2c_verify_client(dev);
+-}
+-EXPORT_SYMBOL(of_find_i2c_device_by_node);
+-
+-/* must call put_device() when done with returned i2c_adapter device */
+-struct i2c_adapter *of_find_i2c_adapter_by_node(struct device_node *node)
+-{
+-	struct device *dev;
+-
+-	dev = bus_find_device(&i2c_bus_type, NULL, node,
+-					 of_dev_node_match);
+-	if (!dev)
+-		return NULL;
+-
+-	return i2c_verify_adapter(dev);
+-}
+-EXPORT_SYMBOL(of_find_i2c_adapter_by_node);
+ #else
+ static void of_i2c_register_devices(struct i2c_adapter *adap) { }
+ #endif /* CONFIG_OF */
+diff --git a/drivers/of/Kconfig b/drivers/of/Kconfig
+index 30caafa..a7bb5da 100644
+--- a/drivers/of/Kconfig
++++ b/drivers/of/Kconfig
+@@ -49,6 +49,15 @@ config OF_IRQ
+ 	def_bool y
+ 	depends on !SPARC
+ 
++config OF_DEVICE
++	def_bool y
++
++config OF_I2C
++	def_tristate I2C
++	depends on I2C
++	help
++	  OpenFirmware I2C accessors
++
+ config OF_NET
+ 	depends on NETDEVICES
+ 	def_bool y
+diff --git a/drivers/of/Makefile b/drivers/of/Makefile
+index 9891232..3a18dc3 100644
+--- a/drivers/of/Makefile
++++ b/drivers/of/Makefile
+@@ -3,6 +3,7 @@ obj-$(CONFIG_OF_FLATTREE) += fdt.o
+ obj-$(CONFIG_OF_PROMTREE) += pdt.o
+ obj-$(CONFIG_OF_ADDRESS)  += address.o
+ obj-$(CONFIG_OF_IRQ)    += irq.o
++obj-$(CONFIG_OF_I2C)	+= of_i2c.o
+ obj-$(CONFIG_OF_NET)	+= of_net.o
+ obj-$(CONFIG_OF_SELFTEST) += selftest.o
+ obj-$(CONFIG_OF_MDIO)	+= of_mdio.o
+diff --git a/drivers/of/of_i2c.c b/drivers/of/of_i2c.c
+new file mode 100644
+index 0000000..b667264
+--- /dev/null
++++ b/drivers/of/of_i2c.c
+@@ -0,0 +1,114 @@
++/*
++ * OF helpers for the I2C API
++ *
++ * Copyright (c) 2008 Jochen Friedrich <jochen@scram.de>
++ *
++ * Based on a previous patch from Jon Smirl <jonsmirl@gmail.com>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ */
++
++#include <linux/i2c.h>
++#include <linux/irq.h>
++#include <linux/of.h>
++#include <linux/of_i2c.h>
++#include <linux/of_irq.h>
++#include <linux/module.h>
++
++void of_i2c_register_devices(struct i2c_adapter *adap)
++{
++	void *result;
++	struct device_node *node;
++
++	/* Only register child devices if the adapter has a node pointer set */
++	if (!adap->dev.of_node)
++		return;
++
++	dev_dbg(&adap->dev, "of_i2c: walking child nodes\n");
++
++	for_each_available_child_of_node(adap->dev.of_node, node) {
++		struct i2c_board_info info = {};
++		struct dev_archdata dev_ad = {};
++		const __be32 *addr;
++		int len;
++
++		dev_dbg(&adap->dev, "of_i2c: register %s\n", node->full_name);
++
++		if (of_modalias_node(node, info.type, sizeof(info.type)) < 0) {
++			dev_err(&adap->dev, "of_i2c: modalias failure on %s\n",
++				node->full_name);
++			continue;
++		}
++
++		addr = of_get_property(node, "reg", &len);
++		if (!addr || (len < sizeof(int))) {
++			dev_err(&adap->dev, "of_i2c: invalid reg on %s\n",
++				node->full_name);
++			continue;
++		}
++
++		info.addr = be32_to_cpup(addr);
++		if (info.addr > (1 << 10) - 1) {
++			dev_err(&adap->dev, "of_i2c: invalid addr=%x on %s\n",
++				info.addr, node->full_name);
++			continue;
++		}
++
++		info.irq = irq_of_parse_and_map(node, 0);
++		info.of_node = of_node_get(node);
++		info.archdata = &dev_ad;
++
++		if (of_get_property(node, "wakeup-source", NULL))
++			info.flags |= I2C_CLIENT_WAKE;
++
++		request_module("%s%s", I2C_MODULE_PREFIX, info.type);
++
++		result = i2c_new_device(adap, &info);
++		if (result == NULL) {
++			dev_err(&adap->dev, "of_i2c: Failure registering %s\n",
++			        node->full_name);
++			of_node_put(node);
++			irq_dispose_mapping(info.irq);
++			continue;
++		}
++	}
++}
++EXPORT_SYMBOL(of_i2c_register_devices);
++
++static int of_dev_node_match(struct device *dev, void *data)
++{
++        return dev->of_node == data;
++}
++
++/* must call put_device() when done with returned i2c_client device */
++struct i2c_client *of_find_i2c_device_by_node(struct device_node *node)
++{
++	struct device *dev;
++
++	dev = bus_find_device(&i2c_bus_type, NULL, node,
++					 of_dev_node_match);
++	if (!dev)
++		return NULL;
++
++	return i2c_verify_client(dev);
++}
++EXPORT_SYMBOL(of_find_i2c_device_by_node);
++
++/* must call put_device() when done with returned i2c_adapter device */
++struct i2c_adapter *of_find_i2c_adapter_by_node(struct device_node *node)
++{
++	struct device *dev;
++
++	dev = bus_find_device(&i2c_bus_type, NULL, node,
++					 of_dev_node_match);
++	if (!dev)
++		return NULL;
++
++	return i2c_verify_adapter(dev);
++}
++EXPORT_SYMBOL(of_find_i2c_adapter_by_node);
++
++MODULE_LICENSE("GPL");
+diff --git a/include/linux/of_i2c.h b/include/linux/of_i2c.h
+new file mode 100644
+index 0000000..5a09d6b
+--- /dev/null
++++ b/include/linux/of_i2c.h
+@@ -0,0 +1,26 @@
++/*
++ * Generic I2C API implementation for PowerPC.
++ *
++ * Copyright (c) 2008 Jochen Friedrich <jochen@scram.de>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ */
++
++#ifndef __LINUX_OF_I2C_H
++#define __LINUX_OF_I2C_H
++
++#if defined(CONFIG_OF_I2C) || defined(CONFIG_OF_I2C_MODULE)
++#include <linux/i2c.h>
++
++extern void of_i2c_register_devices(struct i2c_adapter *adap);
++#else
++static inline void of_i2c_register_devices(struct i2c_adapter *adap)
++{
++	return;
++}
++#endif /* CONFIG_OF_I2C */
++
++#endif /* __LINUX_OF_I2C_H */
+-- 
+1.7.9.5
+

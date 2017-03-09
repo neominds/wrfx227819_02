@@ -1,0 +1,60 @@
+From f13cbc5fb177ad76d92f75da5ddfd5459835d904 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Sat, 2 Apr 2016 10:02:45 +0900
+Subject: [PATCH 1/1] hibernation_SparseMemory_OK
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ arch/arm/mach-mb86s70/hibernate_setup.c |   13 +++++++++++++
+ 1 files changed, 13 insertions(+), 0 deletions(-)
+
+diff --git a/arch/arm/mach-mb86s70/hibernate_setup.c b/arch/arm/mach-mb86s70/hibernate_setup.c
+index a31a5eb..9d1321e 100644
+--- a/arch/arm/mach-mb86s70/hibernate_setup.c
++++ b/arch/arm/mach-mb86s70/hibernate_setup.c
+@@ -209,14 +209,25 @@ int lzo_encrypt(void *dst, void *src, size_t len)
+ 	int ivsize;
+ 	int ret;
+ 	size_t	length = len;
++	unsigned char *tmp;
++
+ 	if ( !enc_flag  ) {
+ 		memcpy(dst, src, length);
+ 		return 0;
+ 	}
+ 
++	tmp = (unsigned char *)kmalloc(PAGE_SIZE, __GFP_ZERO|GFP_KERNEL);
++	if (!tmp) {
++		printk(KERN_ERR "%s: kmalloc error\n");
++		return -1;
++	}
++	memcpy(tmp, src, PAGE_SIZE);
++	src = tmp;
++
+ 	tfm = ctr_crypto_alloc_cipher();
+ 	if (IS_ERR(tfm)) {
+ 		printk(KERN_ERR "%s: failed to load transform for arc4 : %ld\n",__func__, PTR_ERR(tfm));
++		kfree(tmp);
+ 		return PTR_ERR(tfm);
+ 	}
+ 	desc.tfm   = tfm;
+@@ -225,6 +236,7 @@ int lzo_encrypt(void *dst, void *src, size_t len)
+ 	ret = crypto_blkcipher_setkey((void *)tfm, key, 16);
+ 	if(ret){
+ 		printk(KERN_ERR "setkey() failed flags=%x\n",crypto_blkcipher_get_flags(tfm));
++		kfree(tmp);
+ 		return -1;
+ 	}
+ #ifdef	HIBERNATION_SETUP_TRACE
+@@ -245,6 +257,7 @@ printk(KERN_ERR "*****%s: Start\n",__func__);
+ //		printk(KERN_ERR "encrypt failed %d\n",ret);
+ //	}
+ 	crypto_free_blkcipher(tfm);
++	kfree(tmp);
+ #ifdef	HIBERNATION_SETUP_TRACE
+ printk(KERN_ERR "*****%s: End\n",__func__);
+ #endif
+-- 
+1.7.1
+

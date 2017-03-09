@@ -1,0 +1,105 @@
+From 4924527fd81524aac61e22201478de1b0d1db491 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:27 +0000
+Subject: [PATCH 11/34] 0017-enable_usb_sata
+
+
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index a8ad42d..c8d4ff8 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -103,6 +103,25 @@ static int mb86s70_gpio_direction_input(struct gpio_chip *gc, unsigned gpio)
+ 	return 0;
+ }
+ 
++#if 1	/* WR add */
++static int mb86s70_gpio_get_direction(struct gpio_chip *gc, unsigned gpio)
++{
++	struct mb86s70_gpio_chip *gchip = chip_to_mb86s70(gc);
++	unsigned long flags;
++	u32 val;
++
++	spin_lock_irqsave(&gchip->lock, flags);
++	val = readl(gchip->base + DDR(gpio));
++	val &= OFFSET(gpio);
++	spin_unlock_irqrestore(&gchip->lock, flags);
++
++	if ( val == 0 )
++		return 1;
++
++	return 0;
++}
++#endif
++
+ static int mb86s70_gpio_direction_output(struct gpio_chip *gc,
+ 					 unsigned gpio, int value)
+ {
+@@ -244,6 +263,9 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 
+ 	gchip->gc.direction_output = mb86s70_gpio_direction_output;
+ 	gchip->gc.direction_input = mb86s70_gpio_direction_input;
++#if 1	/* WR add */
++	gchip->gc.get_direction = mb86s70_gpio_get_direction;
++#endif
+ 	gchip->gc.request = mb86s70_gpio_request;
+ 	gchip->gc.free = mb86s70_gpio_free;
+ 	gchip->gc.get = mb86s70_gpio_get;
+diff --git a/drivers/usb/dwc3/dwc3-mb86s70.c b/drivers/usb/dwc3/dwc3-mb86s70.c
+index 1b1b861..2be5b80 100644
+--- a/drivers/usb/dwc3/dwc3-mb86s70.c
++++ b/drivers/usb/dwc3/dwc3-mb86s70.c
+@@ -25,6 +25,9 @@
+ #include <linux/of_platform.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/clk.h>
++#if 1	/* WR add */
++#include <linux/delay.h>
++#endif
+ 
+ struct dwc3_mb86s70 {
+ 	struct device		*dev;
+@@ -82,6 +85,31 @@ static int dwc3_mb86s70_remove_child(struct device *dev, void *unused)
+ 
+ static u64 dwc3_mb86s70_dma_mask = DMA_BIT_MASK(32);
+ 
++#if 1	/* WR add */
++#define SATA_OFFSET	0x8
++#define	PDR		0x0c
++#define	DDR		0x1c
++static void usb_sata_reset(void)
++{
++	void __iomem *base;
++	unsigned int reg_ddr, reg_pdr;
++
++	base = ioremap_nocache(0x31000000, 0x30);
++	reg_ddr = readl(base + DDR);
++	reg_pdr = readl(base + PDR);
++	if ( (reg_pdr&SATA_OFFSET) != 0 ) {
++		/* S-ATA Reset */
++		writel( reg_pdr&~SATA_OFFSET, base + PDR );	// PDR=0
++		writel( reg_ddr|SATA_OFFSET, base + DDR );	// DDR=1
++
++		writel( reg_pdr&~SATA_OFFSET, base + PDR );	// PDR=0
++		msleep(10);
++		writel( reg_pdr|SATA_OFFSET, base + PDR );	// PDR=1
++	}
++	iounmap(base);
++}
++#endif
++
+ static int dwc3_mb86s70_probe(struct platform_device *pdev)
+ {
+ 	struct dwc3_mb86s70	*mb86s70;
+@@ -115,6 +143,9 @@ static int dwc3_mb86s70_probe(struct platform_device *pdev)
+ 		dev_err(&pdev->dev, "get_sync failed with err %d\n", ret);
+ 		goto irq_err;
+ 	}
++#if 1	/* WR add */
++	usb_sata_reset();
++#endif
+ 
+ 	if (node) {
+ 		ret = of_platform_populate(node, NULL, NULL, dev);
+-- 
+1.7.9.5
+

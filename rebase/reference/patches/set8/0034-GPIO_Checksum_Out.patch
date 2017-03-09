@@ -1,0 +1,82 @@
+From aef83f812b0d4dfd7d52ad33f219e9d323f6efc8 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Thu, 17 Mar 2016 17:19:38 +0900
+Subject: [PATCH 1/1] GPIO_Checksum\out
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ drivers/gpio/gpio-mb86s7x.c |   28 ----------------------------
+ 1 files changed, 0 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index ae79113..40db8ab 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -50,9 +50,6 @@ struct mb86s70_gpio_chip {
+ 	u32 *ddr_reg_save;
+ 	u32 *pfr_reg_save;
+ 	int resume_dis_pin[N_GPIO + 1];
+-#if 1	/* WR add (checksum) */
+-	u32 checksum;
+-#endif	/* WR Add (checksum) */
+ };
+ 
+ 
+@@ -284,9 +281,6 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 	gchip->gc.owner = THIS_MODULE;
+ 	gchip->gc.dev = &pdev->dev;
+ 	gchip->gc.base = base;
+-#if 1   /* WR add (checksum) */
+-        gchip->checksum=0xffffffff;
+-#endif
+ 
+ 	gchip->pdr_reg_save = devm_kzalloc(&pdev->dev,
+ 		sizeof(u32) * gchip->gc.ngpio / 8, GFP_KERNEL);
+@@ -372,16 +366,10 @@ static int mb86s70_gpio_pm_suspend(struct device *dev)
+ 	/* 8 pin of group */
+ 	ngpio_gp = gchip->gc.ngpio / 8;
+ 
+-#if 1	/* WR add (checksum) */
+-	gchip->checksum=0;
+-#endif
+ 	while (cnt < ngpio_gp) {
+ 		gchip->pdr_reg_save[cnt] = readb(gchip->base + PDR(id));
+ 		gchip->ddr_reg_save[cnt] = readb(gchip->base + DDR(id));
+ 		gchip->pfr_reg_save[cnt] = readb(gchip->base + PFR(id));
+-#if 1	/* WR add (checksum) */	
+-		gchip->checksum += gchip->pdr_reg_save[cnt] + gchip->ddr_reg_save[cnt] + gchip->pfr_reg_save[cnt];
+-#endif
+ 		id = id + 8;
+ 		cnt++;
+ 	};
+@@ -397,26 +385,10 @@ static int mb86s70_gpio_pm_resume(struct device *dev)
+ 	u32 id = 0, cnt = 0, ngpio_gp;
+ 	u32 en_pin_mask[4] = {0}, rd_pfr, rd_pdr, rd_ddr;
+ 	u32 pin_gp;
+-#if 1	/* WR add (checksum) */
+-	u32 tmp_checksum=0;
+-#endif
+ 	if (!gchip)
+ 		return 0;
+ 
+ 	ngpio_gp = gchip->gc.ngpio / 8;
+-#if 1	/* WR add (checksum) */
+-	cnt = 0;
+-	while (cnt < ngpio_gp) {
+-		tmp_checksum += gchip->pdr_reg_save[cnt] + gchip->ddr_reg_save[cnt] + gchip->pfr_reg_save[cnt];
+-		cnt++;
+-	};
+-	if ( tmp_checksum != gchip->checksum ) {
+-		printk(KERN_ERR "%s: checksum error. %x->%x\n",__func__,gchip->checksum, tmp_checksum);
+-		return -1;
+-	} else {
+-		printk(KERN_ERR "%s: checksum ok.\n",__func__);
+-	}
+-#endif
+ 	clk_prepare_enable(gchip->clk);
+ 
+ 
+-- 
+1.7.1
+

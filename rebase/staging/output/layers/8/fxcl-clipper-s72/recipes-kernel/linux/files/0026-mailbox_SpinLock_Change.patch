@@ -1,0 +1,384 @@
+From 8a3733a3592f0413d072bf688f943045e9d1cb68 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:36 +0000
+Subject: [PATCH 20/34] 0026-mailbox_SpinLock_Change
+
+
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 65264b2..3f69046 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -126,13 +126,18 @@ static void got_data(u32 code);
+ static unsigned char pop_cnt=0;
+ static unsigned char push_cnt=0;
+ static u32 mhu_buf[SCB_MHU_BUF];
++static u8  flg_buf[SCB_MHU_BUF];
+ static unsigned char init_flag=0;
+ struct tasklet_struct tasklet;
+ 
+ static void scb_mhu_thread(void *ptr)
+ {
+ 	while ( pop_cnt != push_cnt ) {
++		if ( flg_buf[pop_cnt] == 0 )
+ 			got_data(mhu_buf[pop_cnt]);
++		if ( flg_buf[pop_cnt] == 1 )
++			ipc_client_txdone((void*)mhu_buf[pop_cnt], XFER_OK);
++
+ 			pop_cnt++;
+ 			if ( pop_cnt >= SCB_MHU_BUF )
+ 				pop_cnt=0;
+@@ -200,28 +205,51 @@ static void got_data(u32 code)
+ 
+ static void mhu_recv(void *data)
+ {
++#ifdef	TASKLET_USE
++	u32 tmp;
++	if ( init_flag == 0 ) {
++		tasklet_init(&tasklet, scb_mhu_thread, 0);
++		init_flag++;
++	}
++       	if ( pop_cnt > push_cnt )
++               	tmp = pop_cnt - push_cnt;
++       	else
++               	tmp = SCB_MHU_BUF + pop_cnt - push_cnt;
++       	if ( tmp <=1 ){
++               	pr_err("%s:%d MAILBOX_BUF Full.\n", __func__, __LINE__);
++               	BUG();
++       	}
+ 	if ((u32)data & RESP_BIT) {
+ 		/* Now that we got a reply to last TX, that
+ 		 * must mean the last TX was successful */
++		//ipc_client_txdone(mhu_chan, XFER_OK);
++#if 0
+ 		ipc_client_txdone(mhu_chan, XFER_OK);
++		flg_buf[push_cnt] = 1;
++#else
++		flg_buf[push_cnt] = 1;
++		mhu_buf[push_cnt] = (u32)mhu_chan;
++#endif
+ 
+ 		ax->code = (u32)data; /* Save response */
+ 		complete(&fsm_rsp);
+-	} else
+-#ifdef	TASKLET_USE
+-	{
+-		if ( init_flag == 0 ) {
+-			tasklet_init(&tasklet, scb_mhu_thread, 0);
+-			init_flag++;
+-		}
+-			
++	} else {
++		flg_buf[push_cnt] = 0;
+ 		mhu_buf[push_cnt] = (u32)data;
++	}
+ 		push_cnt++;
+ 		if ( push_cnt >= SCB_MHU_BUF)
+ 			push_cnt=0;
+ 		tasklet_schedule(&tasklet);
+-	}
+-#else	/* TASKLET_USE */
++#else
++	if ((u32)data & RESP_BIT) {
++		/* Now that we got a reply to last TX, that
++		 * must mean the last TX was successful */
++		ipc_client_txdone(mhu_chan, XFER_OK);
++
++		ax->code = (u32)data; /* Save response */
++		complete(&fsm_rsp);
++	} else
+ 		got_data((u32)data);
+ #endif	/* TASKLET_USE */
+ }
+@@ -307,6 +335,7 @@ static int do_xfer(void)
+ {
+ 		int i;
+ 		for ( i=0; i<3; i++ ) {
++			reinit_completion(&fsm_rsp);
+ 			ret = ipc_send_message(mhu_chan, (void *)code);
+ 			if ( ret )
+ 				break;
+diff --git a/drivers/mailbox/f_mhu.c b/drivers/mailbox/f_mhu.c
+index 61965f1..cbc8dd9 100644
+--- a/drivers/mailbox/f_mhu.c
++++ b/drivers/mailbox/f_mhu.c
+@@ -82,10 +82,8 @@ static bool mhu_last_tx_done(struct ipc_link *link)
+ 	u32 val;
+ 
+ 	mbox_dbg("%s:%d\n", __func__, __LINE__);
+-	spin_lock_irqsave(&mlink->lock, flags);
+ 	/* See NOTE_RX_DONE */
+ 	val = __raw_readl(mlink->tx_reg + INTR_STAT_OFS);
+-	spin_unlock_irqrestore(&mlink->lock, flags);
+ 
+ 	return (val == 0);
+ }
+@@ -102,9 +100,7 @@ static int mhu_send_data(struct ipc_link *link, void *data)
+ 		return -EBUSY;
+ 	}
+ 
+-	spin_lock_irqsave(&mlink->lock, flags);
+ 	__raw_writel((u32)data, mlink->tx_reg + INTR_SET_OFS);
+-	spin_unlock_irqrestore(&mlink->lock, flags);
+ 
+ 	return 0;
+ }
+@@ -117,10 +113,8 @@ static int mhu_startup(struct ipc_link *link, void *ignored)
+ 	int ret;
+ 
+ 	mbox_dbg("%s:%d\n", __func__, __LINE__);
+-	spin_lock_irqsave(&mlink->lock, flags);
+ 	val = __raw_readl(mlink->tx_reg + INTR_STAT_OFS);
+ 	__raw_writel(val, mlink->tx_reg + INTR_CLR_OFS);
+-	spin_unlock_irqrestore(&mlink->lock, flags);
+ 
+ 	ret = request_irq(mlink->irq, mhu_rx_interrupt,
+ 		IRQF_SHARED | IRQF_NO_THREAD, mlink->link.link_name, link);
+diff --git a/drivers/mailbox/mailbox.c b/drivers/mailbox/mailbox.c
+index 004a51d..86958df 100644
+--- a/drivers/mailbox/mailbox.c
++++ b/drivers/mailbox/mailbox.c
+@@ -72,16 +72,85 @@ struct tx_poll_timer {
+ static LIST_HEAD(ipc_channels);
+ static DEFINE_MUTEX(chpool_mutex);
+ 
+-static request_token_t _add_to_rbuf(struct ipc_chan *chan, void *data)
++static void tx_tick(struct ipc_chan *chan, enum xfer_result r);
++struct mailbox_que_t {
++	u32 mode;
++	u32 chan;
++	u32 r;
++};
++#define MAILBOX_BUF     64
++static struct mailbox_que_t mailboxque[MAILBOX_BUF];
++static unsigned char pop_cnt=0;
++static unsigned char push_cnt=0;
++static unsigned char init_flag=0;
++struct tasklet_struct mailbox_tasklet;
++static void mailbox_thread(void *ptr);
++static DEFINE_SPINLOCK(mailbox_que_lock);
++
++static void mailbox_que(u32 chan, u32 r, u32 mode)
++{
++	u32 tmp;
++	if ( init_flag == 0 ) {
++		tasklet_init(&mailbox_tasklet, mailbox_thread, 0);
++		init_flag++;
++	}
++	if ( pop_cnt > push_cnt )
++		tmp = pop_cnt - push_cnt;
++	else
++		tmp = MAILBOX_BUF + pop_cnt - push_cnt;
++	if ( tmp <=1 ){
++		pr_err("%s:%d MAILBOX_BUF Full.\n", __func__, __LINE__);
++		BUG();
++	}
++	spin_lock(&mailbox_que_lock);
++	mailboxque[push_cnt].mode = mode;
++	mailboxque[push_cnt].chan = (u32)chan;
++	mailboxque[push_cnt].r    = (u32)r;
++	push_cnt++;
++	if ( push_cnt >= MAILBOX_BUF)
++		push_cnt=0;
++	spin_unlock(&mailbox_que_lock);
++	tasklet_schedule(&mailbox_tasklet);
++}
++static void mailbox_thread(void *ptr)
+ {
+-	request_token_t idx;
+ 	unsigned long flags;
+-
++        while ( pop_cnt != push_cnt ) {
++		if ( mailboxque[pop_cnt].mode == 0 ) {
++			struct ipc_chan *chan = (struct ipc_chan*)mailboxque[pop_cnt].chan;
+ 	spin_lock_irqsave(&chan->lock, flags);
++                	tx_tick(chan, (enum xfer_result)mailboxque[pop_cnt].r );
++                	spin_unlock_irqrestore(&chan->lock, flags);
++		}
++		if (mailboxque[pop_cnt].mode == 1 ) {
++			/* poll_txdone() */
++        		struct tx_poll_timer *timer = (struct tx_poll_timer *)mailboxque[pop_cnt].chan;
++        		bool txdone, resched = false;
++        		struct ipc_chan *chan;
++
++        		list_for_each_entry(chan, &ipc_channels, node) {
++                		if (chan->timer == timer && chan->active_token) {
++                        		resched = true;
++                        		txdone = chan->link_ops->last_tx_done(chan->link);
++                        		if (txdone)
++                                		mailbox_que((u32)chan, (u32)XFER_OK, 0);
++                		}
++        		}
++        		if (resched)
++                		mod_timer(&timer->poll, jiffies + msecs_to_jiffies(timer->period));
++		}
++                pop_cnt++;
++                if ( pop_cnt >= MAILBOX_BUF )
++                        pop_cnt=0;
++        }
++}
++
++static request_token_t _add_to_rbuf(struct ipc_chan *chan, void *data)
++{
++	request_token_t idx;
+ 
+ 	/* See if there is any space left */
+ 	if (chan->msg_count == MBOX_TX_QUEUE_LEN) {
+-		spin_unlock_irqrestore(&chan->lock, flags);
+ 		return 0;
+ 	}
+ 
+@@ -94,8 +163,6 @@ static request_token_t _add_to_rbuf(struct ipc_chan *chan, void *data)
+ 	else
+ 		chan->msg_free++;
+ 
+-	spin_unlock_irqrestore(&chan->lock, flags);
+-
+ 	return idx + 1;
+ }
+ 
+@@ -103,14 +170,10 @@ static void _msg_submit(struct ipc_chan *chan)
+ {
+ 	struct ipc_link *link = chan->link;
+ 	unsigned count, idx;
+-	unsigned long flags;
+ 	void *data;
+ 	int err;
+ 
+-	spin_lock_irqsave(&chan->lock, flags);
+-
+ 	if (!chan->msg_count || chan->active_token) {
+-		spin_unlock_irqrestore(&chan->lock, flags);
+ 		return;
+ 	}
+ 
+@@ -129,19 +192,14 @@ static void _msg_submit(struct ipc_chan *chan)
+ 		chan->active_token = idx + 1;
+ 		chan->msg_count--;
+ 	}
+-
+-	spin_unlock_irqrestore(&chan->lock, flags);
+ }
+ 
+ static void tx_tick(struct ipc_chan *chan, enum xfer_result r)
+ {
+-	unsigned long flags;
+ 	request_token_t t;
+ 
+-	spin_lock_irqsave(&chan->lock, flags);
+ 	t = chan->active_token;
+ 	chan->active_token = 0;
+-	spin_unlock_irqrestore(&chan->lock, flags);
+ 
+ 	/* Submit next message */
+ 	_msg_submit(chan);
+@@ -155,22 +213,7 @@ static void tx_tick(struct ipc_chan *chan, enum xfer_result r)
+ 
+ static void poll_txdone(unsigned long data)
+ {
+-	struct tx_poll_timer *timer = (struct tx_poll_timer *)data;
+-	bool txdone, resched = false;
+-	struct ipc_chan *chan;
+-
+-	list_for_each_entry(chan, &ipc_channels, node) {
+-		if (chan->timer == timer && chan->active_token) {
+-			resched = true;
+-			txdone = chan->link_ops->last_tx_done(chan->link);
+-			if (txdone)
+-				tx_tick(chan, XFER_OK);
+-		}
+-	}
+-
+-	if (resched)
+-		mod_timer(&timer->poll,
+-			jiffies + msecs_to_jiffies(timer->period));
++	mailbox_que((u32)data, 0, 1);
+ }
+ 
+ /*
+@@ -204,7 +247,7 @@ void ipc_link_txdone(struct ipc_link *link, enum xfer_result r)
+ 		return;
+ 	}
+ 
+-	tx_tick(chan, r);
++	mailbox_que((u32)chan, r, 0);
+ }
+ EXPORT_SYMBOL(ipc_link_txdone);
+ 
+@@ -227,7 +270,7 @@ void ipc_client_txdone(void *channel, enum xfer_result r)
+ 		txdone = chan->link_ops->last_tx_done(chan->link);
+ 
+ 	if (txdone)
+-		tx_tick(chan, r);
++		mailbox_que((u32)chan, r, 0);
+ }
+ EXPORT_SYMBOL(ipc_client_txdone);
+ 
+@@ -247,34 +290,41 @@ request_token_t ipc_send_message(void *channel, void *data)
+ {
+ 	struct ipc_chan *chan = (struct ipc_chan *)channel;
+ 	request_token_t t;
++	unsigned long flags;
+ 
+ 	if (!chan) {
+ 		pr_err("%s:%d!!!\n", __func__, __LINE__);
+ 		return 0;
+ 	}
+ 
++	mutex_lock(&chpool_mutex);
+ 	if (chan->tx_block)
+ 		init_completion(&chan->tx_complete);
+ 
++	spin_lock_irqsave(&chan->lock, flags);
+ 	t = _add_to_rbuf(chan, data);
+-	if (!t)
++	if (!t) {
+ 		printk("Try increasing MBOX_TX_QUEUE_LEN\n");
++		spin_unlock_irqrestore(&chan->lock, flags);
++		return 0;
++	}
+ 
+ 	_msg_submit(chan);
+ 
+ 	if (chan->txdone_method	& TXDONE_BY_POLL)
+ 		poll_txdone((unsigned long)chan->timer);
+ 
++	spin_unlock_irqrestore(&chan->lock, flags);
+ 	if (chan->tx_block && chan->active_token) {
+ 		int ret;
+-		ret = wait_for_completion_timeout(&chan->tx_complete,
+-			chan->tx_tout);
++		ret = wait_for_completion_timeout(&chan->tx_complete, chan->tx_tout);
+ 		if (ret == 0) {
+ 			t = 0;
+ 			pr_err("%s:%d!!!\n", __func__, __LINE__);
+-			tx_tick(chan, XFER_ERR);
++			mailbox_que((u32)chan, XFER_ERR, 0);
+ 		}
+ 	}
++	mutex_unlock(&chpool_mutex);
+ 
+ 	return t;
+ }
+@@ -352,9 +402,11 @@ void ipc_free_channel(void *ch)
+ 	if (!chan)
+ 		return;
+ 
++	mutex_lock(&chpool_mutex);
+ 	spin_lock_irqsave(&chan->lock, flags);
+ 	if (!chan->assigned) {
+ 		spin_unlock_irqrestore(&chan->lock, flags);
++		mutex_unlock(&chpool_mutex);
+ 		return;
+ 	}
+ 
+@@ -363,6 +415,7 @@ void ipc_free_channel(void *ch)
+ 	if (chan->txdone_method == (TXDONE_BY_POLL | TXDONE_BY_ACK))
+ 		chan->txdone_method = TXDONE_BY_POLL;
+ 	spin_unlock_irqrestore(&chan->lock, flags);
++	mutex_unlock(&chpool_mutex);
+ 
+ 	chan->link_ops->shutdown(chan->link);
+ 	blocking_notifier_call_chain(&chan->avail, 0, NULL);
+-- 
+1.7.9.5
+

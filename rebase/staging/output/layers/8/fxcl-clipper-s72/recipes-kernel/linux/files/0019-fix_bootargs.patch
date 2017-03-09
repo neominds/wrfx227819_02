@@ -1,0 +1,22 @@
+From 379e35d1cb4f82d563aa42635d97d9fb40a31e31 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:29 +0000
+Subject: [PATCH 13/34] 0019-fix_bootargs
+
+
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 96bae5b..34d678e 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -22,7 +22,7 @@
+ 	};
+ 
+ 	chosen {
+-		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk1p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
++		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
+ 
+ 		linux,initrd-start = <0xc0000000>;
+ 		linux,initrd-end =   <0xc0800000>;
+-- 
+1.7.9.5
+

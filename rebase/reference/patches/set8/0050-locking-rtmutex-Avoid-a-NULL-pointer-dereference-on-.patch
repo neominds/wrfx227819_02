@@ -1,0 +1,28 @@
+From 93af8fe7269c84b323b728d417d152d20659f36c Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Tue, 6 Sep 2016 11:04:22 +0900
+Subject: [PATCH 1/1] locking/rtmutex: Avoid a NULL pointer dereference on deadlock
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ kernel/rtmutex.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/kernel/rtmutex.c b/kernel/rtmutex.c
+index 5f17f55..934c01d 100644
+--- a/kernel/rtmutex.c
++++ b/kernel/rtmutex.c
+@@ -1210,7 +1210,8 @@ rt_mutex_slowlock(struct rt_mutex *lock, int state,
+ 	set_current_state(TASK_RUNNING);
+ 
+ 	if (unlikely(ret)) {
+-		remove_waiter(lock, &waiter);
++		if (rt_mutex_has_waiters(lock))
++			remove_waiter(lock, &waiter);
+ 		rt_mutex_handle_deadlock(ret, detect_deadlock, &waiter);
+ 	}
+ 
+-- 
+1.7.1
+

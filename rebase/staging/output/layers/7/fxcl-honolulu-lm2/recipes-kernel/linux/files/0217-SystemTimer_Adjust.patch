@@ -1,0 +1,29 @@
+From 119bb210bc4f111d1da7315c2a8306c31eb3ad85 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Tue, 24 Jan 2017 07:28:33 +0000
+Subject: [PATCH 171/174] 0217-SystemTimer_Adjust
+
+
+diff --git a/arch/arm/plat-waikiki/time.c b/arch/arm/plat-waikiki/time.c
+index 3520cdb..b11c907 100644
+--- a/arch/arm/plat-waikiki/time.c
++++ b/arch/arm/plat-waikiki/time.c
+@@ -34,13 +34,13 @@
+ 
+ extern int lm2_board_is_A0(void);
+ #ifdef	PANBUG148
+-#define	SYSCLK		300*1000*1000 /* 300MHz */
++#define	SYSCLK		297*1000*1000 /* 300MHz */
+ #else
+ #define	SYSCLK		( lm2_board_is_A0() ? (300*1000*1000) : (275*1000*1000) ) /* 275MHz */
+ #endif
+ #define	DIVISOR		100	/* For HZ=100 10msec */
+ #ifdef	PANBUG148
+-#define	PRESCALE	300	/* Same as Panbug */
++#define	PRESCALE	297	/* Same as Panbug */
+ #else
+ #define	PRESCALE	275	/* Same as Panbug */
+ #endif
+-- 
+1.7.9.5
+

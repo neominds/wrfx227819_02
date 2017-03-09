@@ -1,0 +1,4 @@
+./arch/arm/tools/mach-types
+./arch/arm/Makefile
+./drivers/spi/Makefile
+

@@ -1,0 +1,73 @@
+From 68549315d08c5359fbf30c263bd70af6e4517aef Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:23 +0900
+Subject: [PATCH 16/29] P20_0018-i2c_slave_disable_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index e49258d..96bae5b 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -108,35 +108,10 @@
+ 		interrupts = <0 312 0x4>;
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+-		clock-frequency = <100000>;
++		clock-frequency = <400000>;
+ 		clocks = <&clk_alw_5_8>;
+ 		power-domains = <&power 1>;
+ 
+-		wm8973: wm8973@1a {
+-                        compatible = "wolfson,wm8973";
+-                        reg = <0x1a>;
+-                };
+-
+-		/* default to fan always on high, even during suspend */
+-		amc6821: amc6821@2e {
+-			status = "ok";
+-                        compatible = "ti,amc6821";
+-                        reg = <0x2e>;
+-			low_temp = <0x10>; // unreasonably low target temp == fan always on high
+-			pwminv = <1>;      //  1, inverted PWM output
+-			fan_char = <0x25>;
+-                };
+-		/* alternative fan profile: fan responds to temperature + off in suspend */
+-		amc6821a: amc6821a@2e {
+-			status = "disabled";
+-                        compatible = "ti,amc6821";
+-                        reg = <0x2e>;
+-			low_temp = <0x41>; // 32 degrees C
+-			pwminv = <1>;      //  1, inverted PWM output
+-			fan_char = <0x25>;
+-			off-in-suspend; // stop fan during suspend
+-                };
+-
+ 	};
+ 
+ 	i2c1 {
+@@ -149,22 +124,6 @@
+ 		clocks = <&clk_alw_5_8>;
+ 		clock-frequency = <100000>;
+ 		power-domains = <&power 1>;
+-
+-		touch: ili210x@41 {
+-			compatible = "ili,ili210x", "ili210x";
+-			reg = <0x41>;
+-			interrupts = <0 102 0x4>; /* PD54 - EXTINT22 shared */
+-		};
+-
+-		backlight: backlight@42 {
+-			compatible = "apnet,b01-bl";
+-			reg = <0x42>;
+-			interrupts = <0 102 0x4>; /* PD54 - EXTINT22 shared */
+-			key1 = <1>; /* KEY_ESC */
+-			key2 = <59>; /* KEY_F1 */
+-			key3 = <240>;  /* KEY_UNKNOWN */
+-		};
+-
+ 	};
+ 
+ 	hsspi: hsspi.0 {
+-- 
+1.7.1
+

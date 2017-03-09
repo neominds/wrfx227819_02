@@ -1,0 +1,80 @@
+From ebac3eb579084d7b39af3731a11320fe74e986d6 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:39 +0000
+Subject: [PATCH 23/34] 0029-MemoryTypeChange_FLAT_to_SPARSE
+
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 25aca21..e0fc9a2 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1131,6 +1131,7 @@ source arch/arm/mm/Kconfig
+ config ARM_NR_BANKS
+ 	int
+ 	default 16 if ARCH_EP93XX
++	default 16 if ARCH_MB86S70_SPARSEMEMORY
+ 	default 8
+ 
+ config IWMMXT
+diff --git a/arch/arm/Kconfig.orig b/arch/arm/Kconfig.orig
+index b8d67c5..25aca21 100644
+--- a/arch/arm/Kconfig.orig
++++ b/arch/arm/Kconfig.orig
+@@ -301,11 +301,11 @@ config ARCH_MULTIPLATFORM
+ 	bool "Allow multiple platforms to be selected"
+ 	depends on MMU
+ 	select ARM_PATCH_PHYS_VIRT
+-	select AUTO_ZRELADDR
+ 	select COMMON_CLK
+ 	select MULTI_IRQ_HANDLER
+ 	select SPARSE_IRQ
+ 	select USE_OF
++#	select AUTO_ZRELADDR
+ 
+ config ARCH_INTEGRATOR
+ 	bool "ARM Ltd. Integrator family"
+diff --git a/arch/arm/include/asm/sparsemem.h b/arch/arm/include/asm/sparsemem.h
+index 0009861..a6da462 100644
+--- a/arch/arm/include/asm/sparsemem.h
++++ b/arch/arm/include/asm/sparsemem.h
+@@ -18,7 +18,8 @@
+  * Define these in your mach/memory.h.
+  */
+ #if !defined(SECTION_SIZE_BITS) || !defined(MAX_PHYSMEM_BITS)
+-#error Sparsemem is not supported on this platform
++#define MAX_PHYSMEM_BITS       36
++#define SECTION_SIZE_BITS      28
+ #endif
+ 
+ #endif
+diff --git a/arch/arm/mach-mb86s70/Kconfig b/arch/arm/mach-mb86s70/Kconfig
+index 8488bf0..3235f5f 100644
+--- a/arch/arm/mach-mb86s70/Kconfig
++++ b/arch/arm/mach-mb86s70/Kconfig
+@@ -28,7 +28,21 @@ config ARCH_MB86S70
+ 	select PM_GENERIC_DOMAINS if PM
+ 	select LOCAL_TIMERS
+ 	select ARCH_DMA_ADDR_T_64BIT
+-	select ARCH_SELECT_MEMORY_MODEL
+-	select ARCH_SPARSEMEM_ENABLE
+ 	help
+ 	  Support for Fujitsu Semiconductor's systems.
++
++if ARCH_MB86S70
++choice
++	prompt "Memory Model"
++	default ARCH_MB86S70_FLATMEMORY
++
++config ARCH_MB86S70_FLATMEMORY
++	bool "Flat Memory"
++
++config ARCH_MB86S70_SPARSEMEMORY
++	bool "Sparse Memory"
++	select ARCH_SELECT_MEMORY_MODEL
++	select ARCH_SPARSEMEM_ENABLE
++
++endchoice
++endif
+-- 
+1.7.9.5
+

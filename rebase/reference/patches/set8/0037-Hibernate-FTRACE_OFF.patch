@@ -1,0 +1,38 @@
+From 294bf6073cb47b66c72385c7d76b7350e5b4c386 Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Mon, 4 Apr 2016 16:09:44 +0900
+Subject: [PATCH 1/1] Hibernate\FTRACE_OFF
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ kernel/power/hibernate.c |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
+index c492c6e..a5afbbc 100644
+--- a/kernel/power/hibernate.c
++++ b/kernel/power/hibernate.c
+@@ -781,6 +781,9 @@ int hibernate(void)
+ #ifdef	HIBERNATE_TRACE
+ 	printk(KERN_ERR "++%s: Start\n",__func__);
+ #endif
++#ifdef	CONFIG_FTRACE
++	return 0;
++#endif	/* CONFIG_FTRACE */
+ 
+ 	lock_system_sleep();
+ 	/* The snapshot device should not be opened while we're running */
+@@ -890,6 +893,9 @@ static int software_resume(void)
+ #ifdef	HIBERNATE_TRACE
+ printk(KERN_ERR "++%s: Start(noresume=%d)\n",__func__,noresume);
+ #endif
++#ifdef	CONFIG_FTRACE
++	return 0;
++#endif	/* CONFIG_FTRACE */
+ #if 1	/* WR ADD */
+ 	error = platform_enc_setup(1);
+ 	if ( error ){
+-- 
+1.7.1
+

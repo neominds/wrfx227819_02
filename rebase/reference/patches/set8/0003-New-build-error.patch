@@ -1,0 +1,43 @@
+From 06b308eabc37650674c004a7f02960c420e7dfee Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:15 +0900
+Subject: [PATCH 04/29] P5_0003-New-build-error_rebase
+
+
+diff --git a/arch/arm/common/bL_switcher.c b/arch/arm/common/bL_switcher.c
+index 6c3e566..6ee60ca 100644
+--- a/arch/arm/common/bL_switcher.c
++++ b/arch/arm/common/bL_switcher.c
+@@ -192,7 +192,9 @@ static int bL_switch_to(unsigned int new_cluster_id)
+ 
+ 	/* Install our "inbound alive" notifier. */
+ 	init_completion(&inbound_alive);
++#if 0
+ 	ipi_nr = register_ipi_completion(&inbound_alive, this_cpu);
++#endif
+ 	ipi_nr |= ((1 << 16) << bL_gic_id[ob_cpu][ob_cluster]);
+ 	mcpm_set_early_poke(ib_cpu, ib_cluster, gic_get_sgir_physaddr(), ipi_nr);
+ 
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 4599f65..316f689 100755
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -170,8 +170,6 @@ source "drivers/ipack/Kconfig"
+ 
+ source "drivers/reset/Kconfig"
+ 
+-source "drivers/gator/Kconfig"
+-
+ source "drivers/gpu/kds/Kconfig"
+ 
+ #source "drivers/gpu/ump/Kconfig"
+diff --git a/drivers/gpu/mali-t6xx/Makefile b/drivers/gpu/mali-t6xx/Makefile
+index 51a5178..24a9811 100644
+--- a/drivers/gpu/mali-t6xx/Makefile
++++ b/drivers/gpu/mali-t6xx/Makefile
+@@ -1,2 +1 @@
+-obj-$(CONFIG_MALI_T6XX_VERSION_R3P0)                   += r3p0/
+ obj-$(CONFIG_MALI_T6XX_VERSION_R4P1)                   += r4p1/
+-- 
+1.7.1
+

@@ -1,0 +1,905 @@
+From 7305c92d456f72247600308c4ffffe8bda97a746 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:30 +0000
+Subject: [PATCH 14/34] 0020-PCR3_alpha
+
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index b8d67c5..25aca21 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -301,11 +301,11 @@ config ARCH_MULTIPLATFORM
+ 	bool "Allow multiple platforms to be selected"
+ 	depends on MMU
+ 	select ARM_PATCH_PHYS_VIRT
+-	select AUTO_ZRELADDR
+ 	select COMMON_CLK
+ 	select MULTI_IRQ_HANDLER
+ 	select SPARSE_IRQ
+ 	select USE_OF
++#	select AUTO_ZRELADDR
+ 
+ config ARCH_INTEGRATOR
+ 	bool "ARM Ltd. Integrator family"
+diff --git a/arch/arm/Kconfig.orig b/arch/arm/Kconfig.orig
+index 7d6c4e3..b8d67c5 100644
+--- a/arch/arm/Kconfig.orig
++++ b/arch/arm/Kconfig.orig
+@@ -272,6 +272,9 @@ config GENERIC_BUG
+ 	def_bool y
+ 	depends on BUG
+ 
++config ARCH_HIBERNATION_POSSIBLE
++	def_bool y
++
+ source "init/Kconfig"
+ 
+ source "kernel/Kconfig.freezer"
+@@ -1038,6 +1041,10 @@ source "arch/arm/mach-picoxcell/Kconfig"
+ source "arch/arm/mach-pxa/Kconfig"
+ source "arch/arm/plat-pxa/Kconfig"
+ 
++source "arch/arm/mach-mb8ac0300/Kconfig"
++
++source "arch/arm/mach-mb86s70/Kconfig"
++
+ source "arch/arm/mach-mmp/Kconfig"
+ 
+ source "arch/arm/mach-realview/Kconfig"
+@@ -1495,6 +1502,7 @@ config PCI_HOST_ITE8152
+ 	select DMABOUNCE
+ 
+ source "drivers/pci/Kconfig"
++source "drivers/pci/pcie/Kconfig"
+ 
+ source "drivers/pcmcia/Kconfig"
+ 
+@@ -1572,6 +1580,109 @@ config SCHED_SMT
+ 	  MultiThreading at a cost of slightly increased overhead in some
+ 	  places. If unsure say N here.
+ 
++config DISABLE_CPU_SCHED_DOMAIN_BALANCE
++	bool "(EXPERIMENTAL) Disable CPU level scheduler load-balancing"
++	help
++	  Disables scheduler load-balancing at CPU sched domain level.
++
++config SCHED_HMP
++	bool "(EXPERIMENTAL) Heterogenous multiprocessor scheduling"
++	depends on DISABLE_CPU_SCHED_DOMAIN_BALANCE && SCHED_MC && FAIR_GROUP_SCHED && !SCHED_AUTOGROUP
++	help
++	  Experimental scheduler optimizations for heterogeneous platforms.
++	  Attempts to introspectively select task affinity to optimize power
++	  and performance. Basic support for multiple (>2) cpu types is in place,
++	  but it has only been tested with two types of cpus.
++	  There is currently no support for migration of task groups, hence
++	  !SCHED_AUTOGROUP. Furthermore, normal load-balancing must be disabled
++	  between cpus of different type (DISABLE_CPU_SCHED_DOMAIN_BALANCE).
++	  When turned on, this option adds sys/kernel/hmp directory which
++	  contains the following files:
++	  up_threshold - the load average threshold used for up migration
++	                 (0 - 1023)
++	  down_threshold - the load average threshold used for down migration
++	                 (0 - 1023)
++	  hmp_domains - a list of cpumasks for the present HMP domains,
++	                starting with the 'biggest' and ending with the
++	                'smallest'.
++	  Note that both the threshold files can be written at runtime to
++	  control scheduler behaviour.
++
++config SCHED_HMP_PRIO_FILTER
++	bool "(EXPERIMENTAL) Filter HMP migrations by task priority"
++	depends on SCHED_HMP
++	help
++	  Enables task priority based HMP migration filter. Any task with
++	  a NICE value above the threshold will always be on low-power cpus
++	  with less compute capacity.
++
++config SCHED_HMP_PRIO_FILTER_VAL
++	int "NICE priority threshold"
++	default 5
++	depends on SCHED_HMP_PRIO_FILTER
++
++config HMP_FAST_CPU_MASK
++	string "HMP scheduler fast CPU mask"
++	depends on SCHED_HMP
++	help
++          Leave empty to use device tree information.
++	  Specify the cpuids of the fast CPUs in the system as a list string,
++	  e.g. cpuid 0+1 should be specified as 0-1.
++
++config HMP_SLOW_CPU_MASK
++	string "HMP scheduler slow CPU mask"
++	depends on SCHED_HMP
++	help
++	  Leave empty to use device tree information.
++	  Specify the cpuids of the slow CPUs in the system as a list string,
++	  e.g. cpuid 0+1 should be specified as 0-1.
++
++config HMP_VARIABLE_SCALE
++	bool "Allows changing the load tracking scale through sysfs"
++	depends on SCHED_HMP
++	help
++	  When turned on, this option exports the load average period value
++	  for the load tracking patches through sysfs.
++	  The values can be modified to change the rate of load accumulation
++	  used for HMP migration. 'load_avg_period_ms' is the time in ms to
++	  reach a load average of 0.5 for an idle task of 0 load average
++	  ratio which becomes 100% busy.
++	  For example, with load_avg_period_ms = 128 and up_threshold = 512,
++	  a running task with a load of 0 will be migrated to a bigger CPU after
++	  128ms, because after 128ms its load_avg_ratio is 0.5 and the real
++	  up_threshold is 0.5.
++	  This patch has the same behavior as changing the Y of the load
++	  average computation to
++	        (1002/1024)^(LOAD_AVG_PERIOD/load_avg_period_ms)
++	  but removes intermediate overflows in computation.
++
++config HMP_FREQUENCY_INVARIANT_SCALE
++	bool "(EXPERIMENTAL) Frequency-Invariant Tracked Load for HMP"
++	depends on SCHED_HMP && CPU_FREQ
++	help
++	  Scales the current load contribution in line with the frequency
++	  of the CPU that the task was executed on.
++	  In this version, we use a simple linear scale derived from the
++	  maximum frequency reported by CPUFreq.
++	  Restricting tracked load to be scaled by the CPU's frequency
++	  represents the consumption of possible compute capacity
++	  (rather than consumption of actual instantaneous capacity as
++	  normal) and allows the HMP migration's simple threshold
++	  migration strategy to interact more predictably with CPUFreq's
++	  asynchronous compute capacity changes.
++
++config SCHED_HMP_LITTLE_PACKING
++	bool "Small task packing for HMP"
++	depends on SCHED_HMP
++	default n
++	help
++	  Allows the HMP Scheduler to pack small tasks into CPUs in the
++	  smallest HMP domain.
++	  Controlled by two sysfs files in sys/kernel/hmp.
++	  packing_enable: 1 to enable, 0 to disable packing. Default 1.
++	  packing_limit: runqueue load ratio where a RQ is considered
++	    to be full. Default is NICE_0_LOAD * 9/8.
++
+ config HAVE_ARM_SCU
+ 	bool
+ 	help
+@@ -1599,6 +1710,31 @@ config MCPM
+ 	  for (multi-)cluster based systems, such as big.LITTLE based
+ 	  systems.
+ 
++config BIG_LITTLE
++	bool "big.LITTLE support (Experimental)"
++	depends on CPU_V7 && SMP
++	select MCPM
++	help
++	  This option enables support for the big.LITTLE architecture.
++
++config BL_SWITCHER
++	bool "big.LITTLE switcher support"
++	depends on BIG_LITTLE && MCPM && HOTPLUG_CPU
++	select CPU_PM
++	select ARM_CPU_SUSPEND
++	help
++	  The big.LITTLE "switcher" provides the core functionality to
++	  transparently handle transition between a cluster of A15's
++	  and a cluster of A7's in a big.LITTLE system.
++
++config BL_SWITCHER_DUMMY_IF
++	tristate "Simple big.LITTLE switcher user interface"
++	depends on BL_SWITCHER && DEBUG_KERNEL
++	help
++	  This is a simple and dummy char dev interface to control
++	  the big.LITTLE switcher core code.  It is meant for
++	  debugging purposes only.
++
+ choice
+ 	prompt "Memory split"
+ 	default VMSPLIT_3G
+@@ -1667,6 +1803,7 @@ config ARCH_NR_GPIO
+ 	default 288 if ARCH_SUNXI
+ 	default 264 if MACH_H4700
+ 	default 192 if SOC_AM43XX
++	default 96 if ARCH_MB8AC0300 || ARCH_MB86S70
+ 	default 0
+ 	help
+ 	  Maximum number of GPIOs in the system.
+diff --git a/arch/arm/boot/compressed/Makefile b/arch/arm/boot/compressed/Makefile
+index e60f192..66cceed 100644
+--- a/arch/arm/boot/compressed/Makefile
++++ b/arch/arm/boot/compressed/Makefile
+@@ -133,6 +133,10 @@ KBSS_SZ = $(shell $(CROSS_COMPILE)size $(obj)/../../../../vmlinux | \
+ LDFLAGS_vmlinux = --defsym _kernel_bss_size=$(KBSS_SZ)
+ # Supply ZRELADDR to the decompressor via a linker symbol.
+ ifneq ($(CONFIG_AUTO_ZRELADDR),y)
++ifeq ($(CONFIG_ARCH_MB86S70),y)
++include arch/arm/mach-mb86s70/Makefile.boot
++ZRELADDR    := $(zreladdr-y)
++endif
+ LDFLAGS_vmlinux += --defsym zreladdr=$(ZRELADDR)
+ endif
+ ifeq ($(CONFIG_CPU_ENDIAN_BE8),y)
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index 3f80704..f8c43c8 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -15,7 +15,6 @@
+ 
+ 	aliases {
+ 		serial0 = &uart0;
+-		serial1 = &uart1;
+ 		serial2 = &uart2;
+ 	};
+ 
+@@ -39,7 +38,7 @@
+ 				};
+ 			};
+ 		};
+-
++#if 0 /* Disable Cortex-A7 */
+ 		cluster1: cluster@1 {
+ 			reg = <1>;
+ 			freqs = <825000000>;
+@@ -55,6 +54,7 @@
+ 				};
+ 			};
+ 		};
++#endif
+ 	};
+ 
+ 	cpus {
+@@ -90,7 +90,7 @@
+ 			>;
+ 			clock-latency = <100000>;
+ 		};
+-
++#if 0 /* Disable Cortex-A7 */
+ 		cpu2: cpu@2 {
+ 			device_type = "cpu";
+ 			compatible = "arm,cortex-a7";
+@@ -120,6 +120,7 @@
+ 			>;
+ 			clock-latency = <100000>;
+ 		};
++#endif
+ 	};
+ 
+ 	scb_sensor: scb_sensor {
+@@ -145,7 +146,7 @@
+ 			thermal-sensors = <&scb_sensor 0x1>;
+ 
+ 		};
+-
++#if 0 /* Disable Cortex-A7 */
+ 		ca7-cpu0-thermal {
+ 			polling-delay-passive = <500>;
+ 			polling-delay = <1000>;
+@@ -159,6 +160,7 @@
+ 			thermal-sensors = <&scb_sensor 0x101>;
+ 
+ 		};
++#endif
+ 	};
+ 
+ 	cci@2c090000 {
+@@ -872,6 +874,7 @@
+ 			cpuif-id = <1>;
+ 			cpu = <&cpu1>;
+ 		};
++#if 0 /* Disable Cortex-A7 */
+ 		gic-cpuif@2 {
+ 			compatible = "arm,gic-cpuif";
+ 			cpuif-id = <0x100>;
+@@ -882,6 +885,7 @@
+ 			cpuif-id = <0x101>;
+ 			cpu = <&cpu3>;
+ 		};
++#endif
+ 
+ 	};
+ 
+@@ -890,10 +894,10 @@
+ 		cluster  = <&cluster0>;
+ 		interrupts = <0 2 4>,
+ 			     <0 6 4>;
+-		power-domains = <&power 3>;
++		power-domains = <&power 7>;	/* PCR3 Chnage 3->7 */
+ 
+ 	};
+-
++#if 0 /* Disable Cortex-A7 */
+ 	pmu_a7 {
+ 		compatible = "arm,cortex-a7-pmu";
+ 		cluster  = <&cluster1>;
+@@ -901,6 +905,7 @@
+ 			     <0 22 4>;
+ 		power-domains = <&power 3>;
+ 	};
++#endif
+ 
+ 	ipcu@31a00000 {
+ 		#clock-cells = <1>;
+@@ -970,19 +975,6 @@
+ 			power-domains = <&power 1>;
+ 		};
+ 	
+-		uart1: serial@0x31050000 {
+-			#clock-cells = <1>;
+-			compatible = "arm,pl011", "arm,primecell";
+-			arm,primecell-periphid = <0x00341011>;
+-			reg = <0 0x31050000 0x100>;
+-			interrupts = <0 321 0x4>;
+-			clock-frequency = <7813000>;
+-			clocks = <&clk_alw_f_8>;
+-			clock-names = "apb_pclk";
+-			dma-names = "tx", "rx";
+-			power-domains = <&power 1>;
+-		};
+-	
+ 		uart2: serial@0x31060000 {
+ 			#clock-cells = <1>;
+ 			compatible = "arm,pl011", "arm,primecell";
+@@ -1242,6 +1234,7 @@
+ 
+ 	sdhci0: emmc@300c0000 {
+ 		compatible = "fujitsu,f_sdh30";
++		id = <0>;
+ 		status = "disabled";
+ 		reg = <0 0x300c0000 0x1000>;
+ 		interrupts = <0 164 0x4>,
+@@ -1257,6 +1250,7 @@
+ 
+ 	sdhci1: sdio@36600000 {
+ 		compatible = "fujitsu,f_sdh30";
++		id = <1>;
+ 		reg = <0 0x36600000 0x1000>;
+ 		interrupts = <0 172 0x4>,
+ 			     <0 173 0x4>;
+@@ -1271,7 +1265,8 @@
+ 
+ 	sdhci2: sdio@31410000 {
+ 		compatible = "fujitsu,f_sdh30";
+-		status = "disabled";
++		id = <2>;
++		//status = "disabled";
+ 		reg = <0 0x31410000 0x1000>;
+ 		interrupts = <0 176 0x4>,
+ 			     <0 177 0x4>;
+@@ -1398,18 +1393,18 @@
+ 			compatible = "fujitsu,mb86s7x-pcie_dme-integration";
+ 			ven_dev_id = <0x10cf 0x2051>;
+ 			/* disable msi */
+-			reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>;
++			/* reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>; */
+ 			/* enable msi */
+-			/* reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>, <0 0x320E1200 0x1000>; */
++			 reg = <0 0x320C0000 0x20000>, <0 0x320E0000 0x1000>, <0 0x320E1200 0x1000>;
+ 			interrupts = <0 450 4>, <0 451 4>, <0 452 4>, <0 453 4>,
+ 				<0 454 4>, <0 457 4>, <0 459 4>, <0 460 4>,
+ 				<0 461 4>, <0 462 4>, <0 434 4>;
+ 			dma_int_off = <6>;
+ 			pme_int_off = <4>;
+ 			/* 0: INTx, 1:MSI, 2:MSI-X */
+-			int_type = <0>;
++			int_type = <1>;
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+-			msi-multi = <0>;
++			msi-multi = <2>;
+ 			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_2>, <&clk_alw_7_7>;
+ 			clock-names = "pcie_aclk","pcie_pclk","pcie1_aclk_x2","pcie1_hclk_x2";
+ 			clock_num = <4>;
+@@ -1447,18 +1442,18 @@
+ 			compatible = "fujitsu,mb86s7x-pcie_dme-integration";
+ 			ven_dev_id = <0x10cf 0x204f>;
+ 			/* disable msi */
+-			reg = <0 0x32080000 0x20000>, <0 0x320A0000 0x1000>;
++			/* reg = <0 0x32080000 0x20000>, <0 0x320A0000 0x1000>; */
+ 			/* enable msi */
+-			/* reg = <0 0x32080000 0x20000>, <0 0x320A0000 0x1000>, <0 0x320A1200 0x1000>; */
++			reg = <0 0x32080000 0x20000>, <0 0x320A0000 0x1000>, <0 0x320A1200 0x1000>;
+ 			interrupts = <0 260 4>, <0 261 4>, <0 262 4>, <0 263 4>,
+ 				<0 264 4>, <0 267 4>, <0 269 4>, <0 270 4>,
+ 				<0 271 4>, <0 272 4>, <0 411 4>;
+ 			dma_int_off = <6>;
+ 			pme_int_off = <4>;
+ 			/* 0: INTx, 1:MSI, 2:MSI-X */
+-			int_type = <0>;
++			int_type = <1>;
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+-			msi-multi = <0>;
++			msi-multi = <2>;
+ 			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_2>,<&clk_alw_7_3>;
+ 			clock-names = "pcie_aclk","pcie_pclk","pcie1_aclk_x4","pcie1_hclk_x4";
+ 			clock_num = <4>;
+@@ -1495,18 +1490,18 @@
+ 			compatible = "fujitsu,mb86s7x-pcie_dme-integration";
+ 			ven_dev_id = <0x10cf 0x204c>;
+ 			/* disable msi */
+-			reg = <0 0x32000000 0x20000>, <0 0x32020000 0x10000>;
++			/* reg = <0 0x32000000 0x20000>, <0 0x32020000 0x10000>; */
+ 			/* enable msi */
+-			/* reg = <0 0x32000000 0x20000>, <0 0x32020000 0x10000>, <0 0x32021200 0x1000>; */
++			reg = <0 0x32000000 0x20000>, <0 0x32020000 0x10000>, <0 0x32021200 0x1000>;
+ 			interrupts = <0 240 4>, <0 241 4>, <0 242 4>, <0 243 4>,
+ 				<0 244 4>, <0 247 4>, <0 249 4>, <0 250 4>,
+ 				<0 251 4>, <0 252 4>, <0 407 4>;
+ 			dma_int_off = <6>;
+ 			pme_int_off = <4>;
+ 			/* 0: INTx, 1:MSI, 2:MSI-X */
+-			int_type = <0>;
++			int_type = <1>;
+ 			/* 0: 1_type, 1: 2_type, 2: 4_type ...  5: 32_type */
+-			msi-multi = <0>;
++			msi-multi = <2>;
+ 			clocks = <&clk_alw_c_0>,<&clk_alw_e_0>,<&clk_alw_c_1>,<&clk_alw_7_0>;
+ 			clock-names = "pcie0_aclk","pcie_pclk","pcie0_aclk","pcie0_hclk_x4";
+ 			clock_num = <4>;
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 34d678e..5c12752 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -18,11 +18,13 @@
+ 
+ 	memory {
+ 		device_type = "memory";
+-		reg = <0 0x80000000 0x80000000>;
++		reg = <0 0x81000000 0x7f000000
++		       0x8 0x80000000 0x60000000>;
++		contigmem = <0x8 0xe0000000 0x20000000>;
+ 	};
+ 
+ 	chosen {
+-		bootargs = "shm_offset=2048 loglevel=4 console=ttyAMA0,115200 root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
++		bootargs = "shm_offset=2048 console=ttyAMA2,38400 root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw pcie_ports=native ";
+ 
+ 		linux,initrd-start = <0xc0000000>;
+ 		linux,initrd-end =   <0xc0800000>;
+@@ -33,8 +35,10 @@
+ 		reg = <0 0x31000000 0x10000>;
+ 		gpio-controller;
+ 		#gpio-cells = <2>;
+-		clocks = <&clk_alw_2_1>;
++		clocks = <&clk_alw_5_8>;
+ 		base = <0>;
++		resume_function_enabled = <24>, <25> , <26>, <27>, <28>, <29>,
++			<30>, <31>;
+ 		power-domains = <&power 1>;
+ 	};
+ 	gpio1: mb86s70_gpio1 {
+@@ -42,8 +46,9 @@
+ 		reg = <0 0x31010000 0x10000>;
+ 		gpio-controller;
+ 		#gpio-cells = <2>;
+-		clocks = <&clk_alw_2_1>;
++		clocks = <&clk_alw_5_8>;
+ 		base = <32>;
++		resume_function_enabled = <36>, <37>, <38>, <39>;
+ 		power-domains = <&power 1>;
+        };
+ 
+diff --git a/arch/arm/mach-mb86s70/Makefile.boot b/arch/arm/mach-mb86s70/Makefile.boot
+index f3835c4..df4e08b 100644
+--- a/arch/arm/mach-mb86s70/Makefile.boot
++++ b/arch/arm/mach-mb86s70/Makefile.boot
+@@ -1 +1 @@
+-zreladdr-y	:= 0x80008000
++zreladdr-y	+= 0x81008000
+diff --git a/arch/arm/mach-mb86s70/common.c b/arch/arm/mach-mb86s70/common.c
+index 3eaedc1..fcd7602 100644
+--- a/arch/arm/mach-mb86s70/common.c
++++ b/arch/arm/mach-mb86s70/common.c
+@@ -31,7 +31,7 @@ static const char * const mb86s70_dt_match[] __initconst = {
+ 	NULL,
+ };
+ 
+-DT_MACHINE_START(MB86S70_DT, "Fujitsu MB86S70-based board")
++DT_MACHINE_START(MB86S70_DT, "Fuji Xerox Clipper board")
+ 	.dt_compat	= mb86s70_dt_match,
+ 	.smp_init	= smp_init_ops(mb86s70_smp_init_ops),
+ 	.map_io		= mb86s70_dt_map_io,
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 3ec8986..3638cb6 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -12,6 +12,7 @@
+ #include <linux/mailbox_client.h>
+ 
+ #include <linux/platform_data/mb86s70-iomap.h>
++#include <linux/kthread.h>
+ 
+ #define INTR_STAT_OFS	0x0
+ #define INTR_SET_OFS	0x8
+@@ -21,6 +22,8 @@
+ #define HPNONSEC	1
+ #define SECURE		2
+ 
++#define	THREAD_USE
++
+ int __initdata shm_offset = 0x800;
+ 
+ static void __iomem *cmd_from_scb = MB86S70_SHM_FROM_SCB_VIRT;
+@@ -29,6 +32,9 @@ static void __iomem *cmd_to_scb = MB86S70_SHM_FROM_SCB_VIRT + 0x200;
+ static void __iomem *rsp_to_scb = MB86S70_SHM_FROM_SCB_VIRT + 0x300;
+ static mhu_handler_t handler[MHU_NUM_CMDS];
+ static DEFINE_SPINLOCK(fsm_lock);
++#ifdef THREAD_USE
++static DEFINE_SPINLOCK(got_data_lock);
++#endif
+ static LIST_HEAD(pending_xfers);
+ static LIST_HEAD(free_xfers);
+ static struct ipc_client mhu_cl;
+@@ -113,6 +119,52 @@ static int __init set_shm_offset(char *str)
+ }
+ __setup("shm_offset=", set_shm_offset);
+ 
++
++#ifdef THREAD_USE 
++//#define	THREAD_USE_DEBUG
++static void got_data(u32 code);
++#define SCB_MHU_BUF	16
++static unsigned char pop_cnt=0;
++static unsigned char push_cnt=0;
++static u32 mhu_buf[SCB_MHU_BUF];
++struct task_struct *nt=NULL;
++
++static int scb_mhu_thread(void *ptr)
++{
++	while (1)
++	{
++		if ( pop_cnt != push_cnt ) {
++#ifdef THREAD_USE_DEBUG
++	printk(KERN_ERR "** scb_mhu_thread Call(%d:%d)\n",pop_cnt,push_cnt);
++#endif
++			got_data(mhu_buf[pop_cnt]);
++			pop_cnt++;
++			if ( pop_cnt >= SCB_MHU_BUF )
++				pop_cnt=0;
++		} else {
++			schedule();	
++		}
++	}
++	return 0;
++}
++
++static int __init mhu_thread_init(void)
++{
++#ifdef THREAD_USE_DEBUG
++	printk(KERN_ERR "** mhu_thread_init Start\n");
++#endif
++	nt = kthread_run(&scb_mhu_thread, NULL, "%s_thread%d", "scb_mhu", 0);
++	if (IS_ERR(nt))
++		return PTR_ERR(nt);
++
++#ifdef THREAD_USE_DEBUG
++	printk(KERN_ERR "** mhu_thread_init End\n");
++#endif
++	return 0;
++}
++subsys_initcall(mhu_thread_init);
++#endif	/* THREAD_USE */
++
+ static int mhu_alloc_xfers(int n, struct list_head *list)
+ {
+ 	struct mhu_xfer *x = kzalloc(n * sizeof(struct mhu_xfer), GFP_ATOMIC);
+@@ -137,9 +189,13 @@ static void got_data(u32 code)
+ 	else
+ 		ev = EV_RC;
+ 
+-//	spin_lock_irqsave(&fsm_lock, flags);
++#ifdef	THREAD_USE
++	spin_lock_irqsave(&got_data_lock, flags);
++#endif	/* THREAD_USE */
+ 	if (mhu_fsm[fsm_state][ev] == MHU_INVLD) {
+-//		spin_unlock_irqrestore(&fsm_lock, flags);
++#ifdef	THREAD_USE
++		spin_unlock_irqrestore(&got_data_lock, flags);
++#endif	/* THREAD_USE */
+ 		pr_err("State-%d EV-%d FSM Broken!\n", fsm_state, ev);
+ 		return;
+ 	}
+@@ -161,7 +217,9 @@ static void got_data(u32 code)
+ 		else
+ 			pr_err("No handler for CMD_%u\n", code);
+ 	}
+-//	spin_unlock_irqrestore(&fsm_lock, flags);
++#ifdef	THREAD_USE
++	spin_unlock_irqrestore(&got_data_lock, flags);
++#endif	/* THREAD_USE */
+ }
+ 
+ static void mhu_recv(void *data)
+@@ -174,7 +232,16 @@ static void mhu_recv(void *data)
+ 		ax->code = (u32)data; /* Save response */
+ 		complete(&fsm_rsp);
+ 	} else
++#ifdef	THREAD_USE
++	{
++		mhu_buf[push_cnt] = (u32)data;
++		push_cnt++;
++		if ( push_cnt >= SCB_MHU_BUF)
++			push_cnt=0;
++	}
++#else	/* THREAD_USE */
+ 		got_data((u32)data);
++#endif	/* THREAD_USE */
+ }
+ 
+ static int do_xfer(void)
+@@ -407,7 +474,7 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 		return -EINVAL;
+ 	}
+ 
+-//	spin_lock_irqsave(&fsm_lock, flags);
++	spin_lock_irqsave(&fsm_lock, flags);
+ 
+ 	if (list_empty(&free_xfers) && mhu_alloc_xfers(5, &free_xfers)) {
+ 		spin_unlock_irqrestore(&fsm_lock, flags);
+@@ -426,7 +493,7 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 	else
+ 		list_move_tail(&x->node, &pending_xfers);
+ 
+-//	spin_unlock_irqrestore(&fsm_lock, flags);
++	spin_unlock_irqrestore(&fsm_lock, flags);
+ 
+ 	return do_xfer();
+ }
+diff --git a/arch/arm/mach-mb86s70/sleep.S b/arch/arm/mach-mb86s70/sleep.S
+index d7e1185..d91cd72 100644
+--- a/arch/arm/mach-mb86s70/sleep.S
++++ b/arch/arm/mach-mb86s70/sleep.S
+@@ -29,7 +29,7 @@
+ 
+ #define MB86S70_WFICOLOR_PHYS (MB86S70_ISRAM_PHYS + WFI_COLOR_REG_OFFSET)
+ #define PHYS_TRMP_ADDR	(MB86S70_TRAMPOLINE_PHYS + SEC_RSTADDR_OFF)
+-#define OFFSET_FIX	(PAGE_OFFSET - 0x80000000 /* PHYS_OFFSET */)
++#define OFFSET_FIX	(PAGE_OFFSET - 0x81000000 /* PHYS_OFFSET */)
+ .arch_extension sec
+ 
+ ENTRY(mb86s70_primary_reboot)
+diff --git a/arch/arm/mm/proc-v7.S b/arch/arm/mm/proc-v7.S
+index 658a5d3..f689e60 100644
+--- a/arch/arm/mm/proc-v7.S
++++ b/arch/arm/mm/proc-v7.S
+@@ -134,7 +134,10 @@ ENTRY(cpu_v7_do_resume)
+ 	ALT_UP(orr	r1, r1, #TTB_FLAGS_UP)
+ 	mcr	p15, 0, r1, c2, c0, 0	@ TTB 0
+ 	mcr	p15, 0, r7, c2, c0, 1	@ TTB 1
++#endif	/* wr pcr3 */
+ 	mcr	p15, 0, r11, c2, c0, 2	@ TTB control register
++#if 1	/* wr pcr3 */
++#else
+ 	mrc	p15, 0, r4, c1, c0, 1	@ Read Auxiliary control register
+ 	teq	r4, r9			@ Is it already set?
+ #ifdef CONFIG_ARM_ERRATA_799270
+@@ -143,9 +146,9 @@ ENTRY(cpu_v7_do_resume)
+ #else
+ 	mcrne	p15, 0, r9, c1, c0, 1	@ No, so write it
+ #endif
+-#endif
+ 1:
+ 	mcr	p15, 0, r10, c1, c0, 2	@ Co-processor access control
++#endif	/* wr pcr3 */
+ 	ldr	r4, =PRRR		@ PRRR
+ 	ldr	r5, =NMRR		@ NMRR
+ 	mcr	p15, 0, r4, c10, c2, 0	@ write PRRR
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index c8d4ff8..536365e 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -38,6 +38,7 @@
+ #define PFR(x)	(0x20 + x / 8 * 4)
+ 
+ #define OFFSET(x)	BIT((x) % 8)
++#define N_GPIO	32
+ 
+ struct mb86s70_gpio_chip {
+ 	struct gpio_chip gc;
+@@ -47,6 +48,7 @@ struct mb86s70_gpio_chip {
+ 	u32 *pdr_reg_save;
+ 	u32 *ddr_reg_save;
+ 	u32 *pfr_reg_save;
++	int resume_dis_pin[N_GPIO + 1];
+ };
+ 
+ static inline struct mb86s70_gpio_chip *chip_to_mb86s70(struct gpio_chip *gc)
+@@ -172,7 +174,7 @@ static void mb86s70_gpio_set(struct gpio_chip *gc, unsigned gpio, int value)
+ 	spin_unlock_irqrestore(&gchip->lock, flags);
+ }
+ 
+-#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_FS)
++#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_GPIO)
+ int gpio_dbg_open(struct inode *inode, struct file *file)
+ {
+ 	struct mb86s70_gpio_chip *gchip = inode->i_private;
+@@ -215,20 +217,22 @@ ssize_t gpio_dbg_read(struct file *file, char __user *user_buf,
+ 
+ 	return ret;
+ }
+-#endif
+ 
+ static const struct file_operations gpio_dbg_fops = {
+ 	.open = gpio_dbg_open,
+ 	.read = gpio_dbg_read,
+ };
++#endif
+ 
+ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ {
+ 	struct mb86s70_gpio_chip *gchip;
+ 	struct resource *res;
+-	int ret, base;
++	int ret, base, r, index = 0;
++#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_GPIO)
+ 	struct dentry *dbg_dir;
+ 	struct dentry *dbg_file;
++#endif
+ 
+ 	gchip = devm_kzalloc(&pdev->dev, sizeof(*gchip), GFP_KERNEL);
+ 	if (gchip == NULL)
+@@ -271,7 +275,7 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 	gchip->gc.get = mb86s70_gpio_get;
+ 	gchip->gc.set = mb86s70_gpio_set;
+ 	gchip->gc.label = dev_name(&pdev->dev);
+-	gchip->gc.ngpio = 32;
++	gchip->gc.ngpio = N_GPIO;
+ 	gchip->gc.owner = THIS_MODULE;
+ 	gchip->gc.dev = &pdev->dev;
+ 	gchip->gc.base = base;
+@@ -291,7 +295,7 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 		clk_disable_unprepare(gchip->clk);
+ 	}
+ 
+-#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_FS)
++#if defined(CONFIG_DEBUG_FS) && defined(CONFIG_DEBUG_GPIO)
+ 	dbg_dir = debugfs_create_dir(dev_name(&pdev->dev), NULL);
+ 	if (!dbg_dir) {
+ 		dev_err(&pdev->dev, "debugfs_create_dir fail\n");
+@@ -306,6 +310,18 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 	}
+ #endif
+ 
++	while(1) {
++		r = of_property_read_u32_index(pdev->dev.of_node,
++				"resume_function_enabled",
++				index, &gchip->resume_dis_pin[index]);
++
++		if (r || index > (N_GPIO - 1)) {
++			gchip->resume_dis_pin[index] = -1;
++			break;
++		}
++		index++;
++	};
++
+ 	return ret;
+ }
+ 
+@@ -349,7 +365,9 @@ static int mb86s70_gpio_pm_suspend(struct device *dev)
+ 		id = id + 8;
+ 		cnt++;
+ 	};
++
+ 	clk_disable_unprepare(gchip->clk);
++
+ 	return 0;
+ }
+ 
+@@ -357,20 +375,57 @@ static int mb86s70_gpio_pm_resume(struct device *dev)
+ {
+ 	struct mb86s70_gpio_chip *gchip = dev_get_drvdata(dev);
+ 	u32 id = 0, cnt = 0, ngpio_gp;
++	u32 en_pin_mask[4] = {0}, rd_pfr, rd_pdr, rd_ddr;
++	u32 pin_gp;
+ 
+ 	if (!gchip)
+ 		return 0;
+ 
+ 	ngpio_gp = gchip->gc.ngpio / 8;
++
+ 	clk_prepare_enable(gchip->clk);
+ 
++	while (gchip->resume_dis_pin[cnt] >= 0) {
++		if ( gchip->resume_dis_pin[cnt] > N_GPIO)
++			gchip->resume_dis_pin[cnt] -= gchip->gc.base;
++
++		pin_gp = gchip->resume_dis_pin[cnt] / 8;
++		en_pin_mask[pin_gp] |= 1 << gchip->resume_dis_pin[cnt] % 8;
++		cnt++;
++	};
++
++	cnt = 0;
+ 	while (cnt < ngpio_gp) {
++		/*
++		 * read gpio current state,
++		 * because SCB will update GPIO configure
++		 */
++		rd_pfr = readb(gchip->base + PFR(id));
++		rd_pdr = readb(gchip->base + PDR(id));
++		rd_ddr = readb(gchip->base + DDR(id));
++
++		/* keep disable resume pin value */
++		rd_pfr &= ~en_pin_mask[cnt];
++		rd_pdr &= ~en_pin_mask[cnt];
++		rd_ddr &= ~en_pin_mask[cnt];
++
++		/* clear disable resume pin value from suspend reserved */
++		gchip->pfr_reg_save[cnt] &= en_pin_mask[cnt];
++		gchip->pdr_reg_save[cnt] &= en_pin_mask[cnt];
++		gchip->ddr_reg_save[cnt] &= en_pin_mask[cnt];
++
++		gchip->pfr_reg_save[cnt] |= rd_pfr;
++		gchip->pdr_reg_save[cnt] |= rd_pdr;
++		gchip->ddr_reg_save[cnt] |= rd_ddr;
++
+ 		writeb(gchip->pfr_reg_save[cnt], gchip->base + PFR(id));
+ 		writeb(gchip->pdr_reg_save[cnt], gchip->base + PDR(id));
+ 		writeb(gchip->ddr_reg_save[cnt], gchip->base + DDR(id));
++
+ 		id = id + 8;
+ 		cnt++;
+ 	};
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index ea85416..c3e5903 100644
+--- a/drivers/pci/pci.c
++++ b/drivers/pci/pci.c
+@@ -962,7 +962,7 @@ static void pci_restore_config_dword(struct pci_dev *pdev, int offset,
+ 	for (;;) {
+ 		dev_dbg(&pdev->dev, "restoring config space at offset "
+ 			"%#x (was %#x, writing %#x)\n", offset, val, saved_val);
+-		msleep(100);
++		msleep(10);	/* WR PCR3 100->10 */
+ 		pci_write_config_dword(pdev, offset, saved_val);
+ 		if (retry-- <= 0)
+ 			return;
+@@ -2332,10 +2332,10 @@ void pci_request_acs(void)
+ }
+ 
+ /**
+- * pci_std_enable_acs - enable ACS on devices using standard ACS capabilites
++ * pci_enable_acs - enable ACS if hardware support it
+  * @dev: the PCI device
+  */
+-static int pci_std_enable_acs(struct pci_dev *dev)
++void pci_enable_acs(struct pci_dev *dev)
+ {
+ 	int pos;
+ 	u16 cap;
+@@ -2346,7 +2346,7 @@ static int pci_std_enable_acs(struct pci_dev *dev)
+ 
+ 	pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ACS);
+ 	if (!pos)
+-		return -ENODEV;
++		return;
+ 
+ 	pci_read_config_word(dev, pos + PCI_ACS_CAP, &cap);
+ 	pci_read_config_word(dev, pos + PCI_ACS_CTRL, &ctrl);
+@@ -2364,23 +2364,6 @@ static int pci_std_enable_acs(struct pci_dev *dev)
+ 	ctrl |= (cap & PCI_ACS_UF);
+ 
+ 	pci_write_config_word(dev, pos + PCI_ACS_CTRL, ctrl);
+-
+-	return 0;
+-}
+-
+-/**
+- * pci_enable_acs - enable ACS if hardware support it
+- * @dev: the PCI device
+- */
+-void pci_enable_acs(struct pci_dev *dev)
+-{
+-	if (!pci_acs_enable)
+-		return;
+-
+-	if (!pci_std_enable_acs(dev))
+-		return;
+-
+-	pci_dev_specific_enable_acs(dev);
+ }
+ 
+ /**
+-- 
+1.7.9.5
+

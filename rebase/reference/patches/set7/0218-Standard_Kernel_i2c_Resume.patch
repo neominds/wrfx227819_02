@@ -1,0 +1,62 @@
+From 05996bff92a43cd3d35b1bafcc87ce2b46f8ac7c Mon Sep 17 00:00:00 2001
+From: Auto Configured <auto.configured>
+Date: Tue, 17 May 2016 16:32:27 +0900
+Subject: [PATCH 1/1] Standard_Kernel_i2c_Resume
+
+
+Signed-off-by: Auto Configured <auto.configured>
+---
+ drivers/i2c/busses/i2c-lm2.c |    2 ++
+ drivers/usb/host/xhci-plat.c |   16 ++++++++--------
+ 2 files changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-lm2.c b/drivers/i2c/busses/i2c-lm2.c
+index bb58787..328ddbd 100644
+--- a/drivers/i2c/busses/i2c-lm2.c
++++ b/drivers/i2c/busses/i2c-lm2.c
+@@ -340,6 +340,8 @@ static int lm2_i2c_probe(struct platform_device *pdev)
+ 	}
+ 	dev_info(&pdev->dev, "I2C Driver Registered iomem = %x misc = %x IRQ = %d\n",
+ 		 id->iobase, id->miscbase, id->irq);
++
++	mutex_init(&id->lock);
+ #if 0
+ 	dev_info(&pdev->dev, "EMSR=%x\n",(int)*((int *)(id->iobase+EMSR)));
+ 	dev_info(&pdev->dev, "ESAR=%x\n",(int)*((int *)(id->iobase+ESAR)));
+diff --git a/drivers/usb/host/xhci-plat.c b/drivers/usb/host/xhci-plat.c
+index 509c9d7..5fe2e6f 100644
+--- a/drivers/usb/host/xhci-plat.c
++++ b/drivers/usb/host/xhci-plat.c
+@@ -312,10 +312,10 @@ static int xhci_host_suspend(struct platform_device *pdev)
+ 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
+ 	int i=0;
+ 	void __iomem *base;
+-	base = ioremap_nocache(0x04600000, 0x500);
+-	xhci_reg_save(base, &i, 0x020, 15);
+-	xhci_reg_save(base, &i, 0x420,  4);
+-	iounmap(base);
++//	base = ioremap_nocache(0x04600000, 0x500);
++//	xhci_reg_save(base, &i, 0x020, 15);
++//	xhci_reg_save(base, &i, 0x420,  4);
++//	iounmap(base);
+ 
+ 	base = ioremap_nocache(0x0460c000, 0x700);
+ 	xhci_reg_save(base, &i, 0x100, 36);
+@@ -364,10 +364,10 @@ static int xhci_host_resume(struct platform_device *pdev)
+                 chksum_info |= 0x100;
+         }
+ 	i=0;
+-	base = ioremap_nocache(0x04600000, 0x500);
+-	xhci_reg_load(base, &i, 0x020, 15);
+-	xhci_reg_load(base, &i, 0x420,  4);
+-	iounmap(base);
++//	base = ioremap_nocache(0x04600000, 0x500);
++//	xhci_reg_load(base, &i, 0x020, 15);
++//	xhci_reg_load(base, &i, 0x420,  4);
++//	iounmap(base);
+ 
+ 	base = ioremap_nocache(0x0460c000, 0x700);
+ 	xhci_reg_load(base, &i, 0x100, 36);
+-- 
+1.7.1
+

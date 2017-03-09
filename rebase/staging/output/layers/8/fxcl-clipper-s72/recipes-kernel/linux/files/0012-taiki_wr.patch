@@ -1,0 +1,52 @@
+From 7073fe7f92bc71575862f322a9c7b07f73b15add Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:25 +0000
+Subject: [PATCH 08/34] 0012-taiki_wr
+
+
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index a2b3022..15887c3 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -137,9 +137,9 @@ static void got_data(u32 code)
+ 	else
+ 		ev = EV_RC;
+ 
+-	spin_lock_irqsave(&fsm_lock, flags);
++//	spin_lock_irqsave(&fsm_lock, flags);
+ 	if (mhu_fsm[fsm_state][ev] == MHU_INVLD) {
+-		spin_unlock_irqrestore(&fsm_lock, flags);
++//		spin_unlock_irqrestore(&fsm_lock, flags);
+ 		pr_err("State-%d EV-%d FSM Broken!\n", fsm_state, ev);
+ 		return;
+ 	}
+@@ -161,7 +161,7 @@ static void got_data(u32 code)
+ 		else
+ 			pr_err("No handler for CMD_%u\n", code);
+ 	}
+-	spin_unlock_irqrestore(&fsm_lock, flags);
++//	spin_unlock_irqrestore(&fsm_lock, flags);
+ }
+ 
+ static void mhu_recv(void *data)
+@@ -407,7 +407,7 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 		return -EINVAL;
+ 	}
+ 
+-	spin_lock_irqsave(&fsm_lock, flags);
++//	spin_lock_irqsave(&fsm_lock, flags);
+ 
+ 	if (list_empty(&free_xfers) && mhu_alloc_xfers(5, &free_xfers)) {
+ 		spin_unlock_irqrestore(&fsm_lock, flags);
+@@ -426,7 +426,7 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 	else
+ 		list_move_tail(&x->node, &pending_xfers);
+ 
+-	spin_unlock_irqrestore(&fsm_lock, flags);
++//	spin_unlock_irqrestore(&fsm_lock, flags);
+ 
+ 	return do_xfer();
+ }
+-- 
+1.7.9.5
+

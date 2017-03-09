@@ -1,0 +1,2974 @@
+From 14e9adf43e97eec5efcd798deaf8d1df6d662c45 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:42 +0000
+Subject: [PATCH 26/34] 0032-hibernation_support_alpha
+
+
+diff --git a/arch/arm/boot/compressed/atags_to_fdt.c b/arch/arm/boot/compressed/atags_to_fdt.c
+index d1153c8..8621b4f 100644
+--- a/arch/arm/boot/compressed/atags_to_fdt.c
++++ b/arch/arm/boot/compressed/atags_to_fdt.c
+@@ -1,6 +1,32 @@
+ #include <asm/setup.h>
+ #include <libfdt.h>
+ 
++#ifdef	CONFIG_ARCH_MB86S70
++#include <asm/string.h>
++#include <asm/page.h>
++#define PARAM_ADDR      0x83000000
++#define	STARTUP_BUFF	16
++#define	ENC_BUFF	16
++/*
++ * ew 83000000		12345678
++ * ex)/dev/mmcblk0p2
++ * ew 83000004		7665642f
++ * ew 83000008		636d6d2f
++ * ew 8300000c		306b6c62
++ * ew 83000010		00003270
++ * ex)/dev/sda2
++ * ew 83000004		7665642f
++ * ew 83000008		6164732f
++ * ew 8300000c		00000032
++ *
++ */
++struct  panbug_param {
++        unsigned int    magic;
++        unsigned char   startup[STARTUP_BUFF];
++        unsigned char   enc[ENC_BUFF];
++};
++#endif	/* CONFIG_ARCH_MB86S70 */
++
+ #if defined(CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND)
+ #define do_extend_cmdline 1
+ #else
+@@ -15,6 +41,15 @@ static int node_offset(void *fdt, const char *node_path)
+ 	return offset;
+ }
+ 
++static int setprop_inplace(void *fdt, const char *node_path, const char *property,
++                const void *val, int size)
++{
++	int offset = node_offset(fdt,node_path);
++	if(offset < 0)
++		return  offset;
++	return  fdt_setprop_inplace(fdt, offset, property, val, size);
++}
++
+ static int setprop(void *fdt, const char *node_path, const char *property,
+ 		   uint32_t *val_array, int size)
+ {
+@@ -95,6 +130,49 @@ static void merge_fdt_bootargs(void *fdt, const char *fdt_cmdline)
+ 	setprop_string(fdt, "/chosen", "bootargs", cmdline);
+ }
+ 
++static int replace_startup(void *fdt, int total_space)
++{
++	struct panbug_param	*p_ptr = (struct panbug_param *)PARAM_ADDR;
++	unsigned char   tmp_buf[STARTUP_BUFF];
++	int len,rtn;
++
++	if ( p_ptr->magic != 0x12345678 )
++		return 0;
++
++	len = strlen(p_ptr->startup);
++	if ( len == 0 )
++		return 0;
++
++	memset(tmp_buf, 0, STARTUP_BUFF);
++	memcpy(tmp_buf,p_ptr->startup, len);
++	rtn = setprop_inplace(fdt, "/set_panbug", "start-up", tmp_buf, STARTUP_BUFF);
++	if ( rtn ) {
++		return 0;
++	}
++       	return  1;
++}
++
++static int replace_enc(void *fdt, int total_space)
++{
++	struct panbug_param	*p_ptr = (struct panbug_param *)PARAM_ADDR;
++	unsigned char   tmp_buf[ENC_BUFF];
++	int len,rtn;
++
++	if ( p_ptr->magic != 0x12345678 )
++		return 0;
++
++	len = strlen(p_ptr->enc);
++	if ( len == 0 )
++		return 0;
++
++	memset(tmp_buf, 0, ENC_BUFF);
++	memcpy(tmp_buf,p_ptr->enc, len);
++	rtn = setprop_inplace(fdt, "/set_panbug", "enc-key", tmp_buf, ENC_BUFF);
++	if ( rtn ) {
++		return 0;
++	}
++       	return  1;
++}
+ /*
+  * Convert and fold provided ATAGs into the provided FDT.
+  *
+@@ -116,6 +194,12 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
+ 	if ((u32)atag_list & 0x3)
+ 		return 1;
+ 
++#ifdef	CONFIG_ARCH_MB86S70
++	if(replace_startup(fdt, total_space)) {
++		if(replace_enc(fdt, total_space))
++			return 1;
++	}
++#endif	/* CONFIG_ARCH_MB86S70 */
+ 	/* if we get a DTB here we're done already */
+ 	if (*(u32 *)atag_list == fdt32_to_cpu(FDT_MAGIC))
+ 	       return 0;
+@@ -187,3 +271,4 @@ int atags_to_fdt(void *atag_list, void *fdt, int total_space)
+ 
+ 	return fdt_pack(fdt);
+ }
++
+diff --git a/arch/arm/boot/dts/mb86s72eb.dts b/arch/arm/boot/dts/mb86s72eb.dts
+index 39db308..694f8ac 100644
+--- a/arch/arm/boot/dts/mb86s72eb.dts
++++ b/arch/arm/boot/dts/mb86s72eb.dts
+@@ -30,6 +30,13 @@
+ 		linux,initrd-end =   <0xc0800000>;
+ 	};
+ 
++        set_panbug {
++		/*start-up   = [ 2f 64 65 76 2f 6d 6d 63 62 6c 6b 30 70 32 ];*/	/* /dev/mmcblk0p2 */
++		/*start-up   = [ 2f 64 65 76 2f 73 64 61 32 ];*/ 			/* /dev/sda2      */
++		start-up = [ 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ];		/* 16Byte(max)   */
++		enc-key  = [ 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ];		/* 16Byte(must)  */
++        };
++
+ 	gpio0: mb86s70_gpio0 {
+ 		compatible = "fujitsu,mb86s70-gpio";
+ 		reg = <0 0x31000000 0x10000>;
+diff --git a/arch/arm/mach-mb86s70/Makefile b/arch/arm/mach-mb86s70/Makefile
+index a61174d..2551628 100644
+--- a/arch/arm/mach-mb86s70/Makefile
++++ b/arch/arm/mach-mb86s70/Makefile
+@@ -3,6 +3,6 @@
+ #
+ ccflags-$(CONFIG_ARCH_MULTIPLATFORM) := -I$(srctree)/$(src)/include
+ 
+-obj-y := sleep.o common.o devices.o headsmp.o scb_mhu.o mcpm.o mb86s70_pm_setup.o nonsec.o
++obj-y := sleep.o common.o devices.o headsmp.o scb_mhu.o mcpm.o mb86s70_pm_setup.o nonsec.o hibernate_setup.o
+ obj-$(CONFIG_PM_GENERIC_DOMAINS) += pm_domains.o
+ CFLAGS_REMOVE_mcpm.o	= -pg
+diff --git a/arch/arm/mach-mb86s70/hibernate_setup.c b/arch/arm/mach-mb86s70/hibernate_setup.c
+new file mode 100644
+index 0000000..f8ad08f
+--- /dev/null
++++ b/arch/arm/mach-mb86s70/hibernate_setup.c
+@@ -0,0 +1,114 @@
++#include <linux/delay.h>
++#include <linux/irq.h>
++#include <linux/dmi.h>
++#include <linux/device.h>
++#include <linux/suspend.h>
++#include <linux/reboot.h>
++#include <linux/module.h>
++#include <asm/io.h>
++
++#undef	HIBERNATION_SETUP_TRACE
++
++#ifdef CONFIG_HIBERNATION
++extern int mb86s70_dpm_suspend(char* name);
++
++static int mb86s70_hibernate_begin(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static void mb86s70_hibernate_end(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++}
++static int mb86s70_hibernate_pre_snapshot(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static int mb86s70_hibernate_prepare(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static void mb86s70_hibernate_finish(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++}
++static int mb86s70_hibernate_enter(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static void mb86s70_hibernate_leave(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++}
++static int mb86s70_hibernate_pre_restore(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static void mb86s70_hibernate_restore_cleanup(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++}
++static void mb86s70_hibernate_recover(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++}
++static int mb86s70_hibernate_encryption(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static int mb86s70_hibernate_composite(void)
++{
++#ifdef	HIBERNATION_SETUP_TRACE
++	printk(KERN_ERR "*****%s:\n",__func__);
++#endif
++	return 0;
++}
++static const struct platform_hibernation_ops mb86s70_hibernate_ops = {
++        .begin           = mb86s70_hibernate_begin,
++        .end             = mb86s70_hibernate_end,
++        .pre_snapshot    = mb86s70_hibernate_pre_snapshot,
++        .prepare         = mb86s70_hibernate_prepare,
++        .finish          = mb86s70_hibernate_finish,
++        .enter           = mb86s70_hibernate_enter,
++        .leave           = mb86s70_hibernate_leave,
++        .pre_restore     = mb86s70_hibernate_pre_restore,
++        .restore_cleanup = mb86s70_hibernate_restore_cleanup,
++        .recover         = mb86s70_hibernate_recover,
++	.encryption	 = mb86s70_hibernate_encryption,
++	.composite	 = mb86s70_hibernate_composite,
++};
++
++int __init	mb86s70_hibernate_init(void)
++{
++	hibernation_set_ops(&mb86s70_hibernate_ops);
++}
++subsys_initcall(mb86s70_hibernate_init);
++#endif	/* CONFIG_HIBERNATION */
+diff --git a/arch/arm/mach-mb86s70/mcpm.c b/arch/arm/mach-mb86s70/mcpm.c
+index 7a0334f..10f8a2a 100644
+--- a/arch/arm/mach-mb86s70/mcpm.c
++++ b/arch/arm/mach-mb86s70/mcpm.c
+@@ -107,8 +107,14 @@ static int mb86s70_pm_power_up(unsigned int cpu, unsigned int cluster)
+ 			cmd.cluster_id,	cmd.cpu_id, cmd.cpu_state);
+ 
+ 		init_completion(&got_rsp);
++#if 0   /* WR (no SKIP) */
++		if (skip_mhu || is_hibernation_flag() ) {
++			printk(KERN_ERR "**%s: skip(cpu=0x%x cluster=0x%x)\n",__func__, cpu, cluster);
++			ret = 0;
++#else	/* WR (no SKIP) */
+ 		if (skip_mhu) {
+ 			ret = 0;
++#endif	/* WR (no SKIP) */
+ 		} else {
+ 			mb86s70_set_wficolor(cluster, cpu, AT_WFI_DO_NOTHING);
+ 			arch_spin_unlock(&mb86s70_pm_lock);
+diff --git a/arch/arm/mach-mb86s70/pm_domains.c b/arch/arm/mach-mb86s70/pm_domains.c
+index 4717b69..eaed975 100644
+--- a/arch/arm/mach-mb86s70/pm_domains.c
++++ b/arch/arm/mach-mb86s70/pm_domains.c
+@@ -27,7 +27,9 @@
+ #include <linux/of_platform.h>
+ #include <linux/sched.h>
+ #include <linux/scb_mhu_api.h>
++#include <linux/suspend.h>
+ 
++#undef	POWEDOMAIN_TRACE
+ /*
+  * mb86s7x specific wrapper around the generic power domain
+  */
+@@ -46,10 +48,24 @@ static int mb86s7x_pd_power(struct generic_pm_domain *domain, bool power_on)
+ 
+ 	pd = container_of(domain, struct mb86s7x_pm_domain, pd);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	if ( power_on )
++		pr_info("%s: domain %02d <- ON\n", __func__, pd->powerdomain_index);
++	else
++		pr_info("%s: domain %02d <- OFF\n", __func__, pd->powerdomain_index);
++#else	/* POWEDOMAIN_TRACE */
+ 	pr_info("%s: domain %s <- %d\n", __func__, pd->name, power_on);
++#endif	/* POWEDOMAIN_TRACE */
+ 
++#if 1   /* WR (SKIP) */
++	if (skip_mhu || is_hibernation_flag() ) {
++		printk(KERN_ERR "**%s: pass\n",__func__);
++		return 0;
++	}
++#else	/* WR (SKIP) */
+ 	if (skip_mhu)
+ 		return 0;
++#endif	/* WR (SKIP) */
+ 
+ 	cmd.payload_size = sizeof(cmd);
+ 	cmd.powerdomain_index = pd->powerdomain_index;
+@@ -69,6 +85,12 @@ static int mb86s7x_pd_power(struct generic_pm_domain *domain, bool power_on)
+ 		}
+ 		if (ret)
+ 			wait_for_completion(&got_rsp);
++#ifdef	POWEDOMAIN_TRACE
++		if ( cmd.state )
++			printk(KERN_ERR "PowerDomain %02d ON\n", pd->powerdomain_index);
++		else
++			printk(KERN_ERR "PowerDomain %02d OFF\n", pd->powerdomain_index);
++#endif	/* POWEDOMAIN_TRACE */
+ 	}
+ 
+ 	return 0;
+@@ -216,6 +238,12 @@ static __init int mb86s7x_pm_init_power_domain(void)
+ 		
+ 		platform_set_drvdata(child_pdev, pd);
+ 
++#ifdef	POWEDOMAIN_TRACE
++		if ( cmd.state )
++			printk(KERN_ERR "PowerDomain %02d ON\n", pd_num);
++		else
++			printk(KERN_ERR "PowerDomain %02d OFF\n", pd_num);
++#endif	/* POWEDOMAIN_TRACE */
+ 		pr_debug("power domain %s starting.\n", child->name);
+ 		pd_num++;
+ 	}
+@@ -227,7 +255,10 @@ static __init int mb86s7x_pm_init_power_domain(void)
+ 		if (master == NULL)
+ 			continue;
+ 
++#if 1	/* WR Change */
++#else
+ 		mb86s7x_add_sub_domain(master, child);
++#endif	/* WR Change */
+ 	}
+ 
+ 	if (of_genpd_add_provider(np, of_genpd_xlate_onecell, &mb86s7x_pd)) {
+diff --git a/arch/arm/mach-mb8ac0300/hibernate.c b/arch/arm/mach-mb8ac0300/hibernate.c
+index 2e6024a..64871f5 100644
+--- a/arch/arm/mach-mb8ac0300/hibernate.c
++++ b/arch/arm/mach-mb8ac0300/hibernate.c
+@@ -21,11 +21,17 @@
+ 
+ #include "devices.h"
+ 
++#define  WR_GCC_VERSION
++
+ /* Used in hibernate_asm.S */
+ unsigned long saved_context_usr[10];	/* user r3 - r11, r13, r14 */
+ unsigned long saved_context_svc[2];	/* SVC r13, r14 */
+ unsigned long saved_cpsr;
+ unsigned long saved_spsr_svc;
++#ifdef	WR_GCC_VERSION
++unsigned long saved_context_usr_lr;	/* user r13 */
++unsigned long saved_context_svc_lr;	/* SVC r13 */
++#endif	/* WR_GCC_VERSION */
+ 
+ 
+ /**
+diff --git a/arch/arm/mach-mb8ac0300/hibernate_asm.S b/arch/arm/mach-mb8ac0300/hibernate_asm.S
+index 5db7937..20aa517 100644
+--- a/arch/arm/mach-mb8ac0300/hibernate_asm.S
++++ b/arch/arm/mach-mb8ac0300/hibernate_asm.S
+@@ -22,6 +22,8 @@
+ #include <asm/assembler.h>
+ #include <asm/asm-offsets.h>
+ 
++#define	 WR_GCC_VERSION
++
+ 	.text
+ ENTRY(swsusp_arch_suspend)
+ 	/*
+@@ -48,8 +50,14 @@ ENTRY(swsusp_arch_suspend)
+ 	 * Save User context
+ 	 */
+ 	ldr     r3, .Lsaved_context_usr
++#ifdef	WR_GCC_VERSION
++	stmia   r3, {r4-r11, r14}
++	ldr	r3, .Lsaved_context_usr_lr
++	str	sp, [r3]
++#else	/* WR_GCC_VERSION */
+ 	stmia   r3, {r4-r11, r13, r14}
+-
++#endif	/* WR_GCC_VERSION */
++	
+ 	/*
+ 	 * Change to SVC mode
+ 	 */
+@@ -60,7 +68,13 @@ ENTRY(swsusp_arch_suspend)
+ 	 * Save SVC context
+ 	 */
+ 	ldr	r3, .Lsaved_context_svc
++#ifdef	WR_GCC_VERSION
++	stmia	r3, {r14}
++	ldr	r3, .Lsaved_context_svc_lr
++	str	sp, [r3]
++#else
+ 	stmia	r3, {r13 - r14}
++#endif
+ 	ldr	r3, .Lsaved_spsr_svc
+ 	mrs	r2, spsr
+ 	str	r2, [r3]
+@@ -139,7 +153,13 @@ pbe_copy_loop:
+ 	 * Restore user mode context
+ 	 */
+ 	ldr	r3, .Lsaved_context_usr
++#ifdef	WR_GCC_VERSION
++	ldmia	r3, {r4-r11, r14}
++	ldr     r3, .Lsaved_context_usr_lr
++	ldr	sp, [r3]
++#else	/* WR_GCC_VERSION */
+ 	ldmia	r3, {r4-r11, r13, r14}
++#endif	/* WR_GCC_VERSION */
+ 	ldr	r3, .Lsaved_cpsr
+ 	ldr	r2, [r3]
+ 	msr	cpsr_c, r2
+@@ -154,7 +174,13 @@ pbe_copy_loop:
+ 	 * Restore SVC context
+ 	 */
+ 	ldr	r3, .Lsaved_context_svc
++#ifdef	WR_GCC_VERSION
++	ldmia	r3, {r14}
++	ldr     r3, .Lsaved_context_svc_lr
++	ldr	sp, [r3]
++#else	/* WR_GCC_VERSION */
+ 	ldmia	r3, {r13-r14}
++#endif	/* WR_GCC_VERSION */
+ 	ldr	r3, .Lsaved_spsr_svc
+ 	ldr	r1, [r3]
+ 	msr	spsr_cxsf, r1
+@@ -169,3 +195,7 @@ ENDPROC(swsusp_arch_resume)
+ .Lsaved_cpsr:			.long	saved_cpsr
+ .Lsaved_spsr_svc:		.long   saved_spsr_svc
+ .Lrestore_pblist:		.long	restore_pblist
++#ifdef	WR_GCC_VERSION
++.Lsaved_context_usr_lr:		.long	saved_context_usr_lr
++.Lsaved_context_svc_lr:		.long	saved_context_svc_lr
++#endif	/* WR_GCC_VERSION */
+diff --git a/drivers/base/platform.c b/drivers/base/platform.c
+index 2cc10aa..8335838 100644
+--- a/drivers/base/platform.c
++++ b/drivers/base/platform.c
+@@ -26,6 +26,7 @@
+ #include "base.h"
+ #include "power/power.h"
+ 
++#undef	PLAT_CALLBAK_TRACE
+ /* For automatically allocated device IDs */
+ static DEFINE_IDA(platform_devid_ida);
+ 
+@@ -750,7 +751,14 @@ static int platform_legacy_suspend(struct device *dev, pm_message_t mesg)
+ 	int ret = 0;
+ 
+ 	if (dev->driver && pdrv->suspend)
++#ifdef	PLAT_CALLBAK_TRACE
++	{
++		printk(KERN_ERR "##%s: pdrv->suspend=%p\n",__func__, pdrv->suspend);
+ 		ret = pdrv->suspend(pdev, mesg);
++	}
++#else
++		ret = pdrv->suspend(pdev, mesg);
++#endif
+ 
+ 	return ret;
+ }
+@@ -762,7 +770,14 @@ static int platform_legacy_resume(struct device *dev)
+ 	int ret = 0;
+ 
+ 	if (dev->driver && pdrv->resume)
++#ifdef  PLAT_CALLBAK_TRACE
++	{
++		printk(KERN_ERR "##%s: pdrv->resume=%p\n",__func__, pdrv->resume);
+ 		ret = pdrv->resume(pdev);
++	}
++#else
++		ret = pdrv->resume(pdev);
++#endif
+ 
+ 	return ret;
+ }
+@@ -781,7 +796,14 @@ int platform_pm_suspend(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->suspend)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->suspend=%p\n",__func__, drv->pm->suspend);
+ 			ret = drv->pm->suspend(dev);
++		}
++#else
++			ret = drv->pm->suspend(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_suspend(dev, PMSG_SUSPEND);
+ 	}
+@@ -799,7 +821,14 @@ int platform_pm_resume(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->resume)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->resume=%p\n",__func__, drv->pm->resume);
+ 			ret = drv->pm->resume(dev);
++		}
++#else
++			ret = drv->pm->resume(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_resume(dev);
+ 	}
+@@ -821,7 +850,14 @@ int platform_pm_freeze(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->freeze)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->freeze=%p\n",__func__, drv->pm->freeze);
+ 			ret = drv->pm->freeze(dev);
++		}
++#else
++			ret = drv->pm->freeze(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_suspend(dev, PMSG_FREEZE);
+ 	}
+@@ -839,7 +875,14 @@ int platform_pm_thaw(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->thaw)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->thaw=%p\n",__func__, drv->pm->thaw);
+ 			ret = drv->pm->thaw(dev);
++		}
++#else
++			ret = drv->pm->thaw(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_resume(dev);
+ 	}
+@@ -857,7 +900,14 @@ int platform_pm_poweroff(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->poweroff)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->poweroff=%p\n",__func__, drv->pm->poweroff);
+ 			ret = drv->pm->poweroff(dev);
++		}
++#else
++			ret = drv->pm->poweroff(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_suspend(dev, PMSG_HIBERNATE);
+ 	}
+@@ -875,7 +925,14 @@ int platform_pm_restore(struct device *dev)
+ 
+ 	if (drv->pm) {
+ 		if (drv->pm->restore)
++#ifdef  PLAT_CALLBAK_TRACE
++		{
++			printk(KERN_ERR "##%s: drv->pm->restore=%p\n",__func__, drv->pm->restore);
+ 			ret = drv->pm->restore(dev);
++		}
++#else
++			ret = drv->pm->restore(dev);
++#endif
+ 	} else {
+ 		ret = platform_legacy_resume(dev);
+ 	}
+diff --git a/drivers/base/power/domain.c b/drivers/base/power/domain.c
+index 6397585..16c5878 100644
+--- a/drivers/base/power/domain.c
++++ b/drivers/base/power/domain.c
+@@ -19,6 +19,48 @@
+ #include <linux/suspend.h>
+ #include <linux/export.h>
+ 
++#undef	DOMAIN_TRACE
++#undef	POWEDOMAIN_TRACE
++
++#ifdef	DOMAIN_TRACE
++#define GENPD_DEV_CALLBACK_MON(genpd, type, callback, dev)		\
++({								\
++	type (*__routine)(struct device *__d); 			\
++	type __ret = (type)0;					\
++								\
++	__routine = genpd->dev_ops.callback; 			\
++	if (__routine) {					\
++		printk(KERN_ERR "**%s: callback=%p\n",__func__, __routine);	\
++		__ret = __routine(dev); 			\
++	} else {						\
++		__routine = dev_gpd_data(dev)->ops.callback;	\
++		if (__routine) { 					\
++			printk(KERN_ERR "**%s: callback=%p\n",__func__, __routine);	\
++			__ret = __routine(dev);			\
++		} else {					\
++			printk(KERN_ERR "**%s: callback=--\n",__func__);	\
++		}						\
++	}							\
++	__ret;							\
++})
++
++#define GENPD_DEV_TIMED_CALLBACK_MON(genpd, type, callback, dev, field, name)	\
++({										\
++	ktime_t __start = ktime_get();						\
++	type __retval = GENPD_DEV_CALLBACK_MON(genpd, type, callback, dev);		\
++	s64 __elapsed = ktime_to_ns(ktime_sub(ktime_get(), __start));		\
++	struct gpd_timing_data *__td = &dev_gpd_data(dev)->td;			\
++	if (!__retval && __elapsed > __td->field) {				\
++		__td->field = __elapsed;					\
++		dev_warn(dev, name " latency exceeded, new value %lld ns\n",	\
++			__elapsed);						\
++		genpd->max_off_time_changed = true;				\
++		__td->constraint_changed = true;				\
++	}									\
++	__retval;								\
++})
++#endif
++
+ #define GENPD_DEV_CALLBACK(genpd, type, callback, dev)		\
+ ({								\
+ 	type (*__routine)(struct device *__d); 			\
+@@ -84,14 +126,24 @@ struct generic_pm_domain *dev_to_genpd(struct device *dev)
+ 
+ static int genpd_stop_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_TIMED_CALLBACK_MON(genpd, int, stop, dev,
++					stop_latency_ns, "stop");
++#else
+ 	return GENPD_DEV_TIMED_CALLBACK(genpd, int, stop, dev,
+ 					stop_latency_ns, "stop");
++#endif
+ }
+ 
+ static int genpd_start_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_TIMED_CALLBACK_MON(genpd, int, start, dev,
++					start_latency_ns, "start");
++#else
+ 	return GENPD_DEV_TIMED_CALLBACK(genpd, int, start, dev,
+ 					start_latency_ns, "start");
++#endif
+ }
+ 
+ static bool genpd_sd_counter_dec(struct generic_pm_domain *genpd)
+@@ -108,6 +160,9 @@ static void genpd_sd_counter_inc(struct generic_pm_domain *genpd)
+ {
+ 	atomic_inc(&genpd->sd_count);
+ 	smp_mb__after_atomic_inc();
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: atomic_read=%d (%p)\n", __func__, atomic_read(&genpd->sd_count), &genpd->sd_count);
++#endif
+ }
+ 
+ static void genpd_acquire_lock(struct generic_pm_domain *genpd)
+@@ -172,6 +227,9 @@ static int __pm_genpd_poweron(struct generic_pm_domain *genpd)
+ 	DEFINE_WAIT(wait);
+ 	int ret = 0;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n");
++#endif
+ 	/* If the domain's master is being waited for, we have to wait too. */
+ 	for (;;) {
+ 		prepare_to_wait(&genpd->status_wait_queue, &wait,
+@@ -208,6 +266,9 @@ static int __pm_genpd_poweron(struct generic_pm_domain *genpd)
+ 	 * with it.
+ 	 */
+ 	list_for_each_entry(link, &genpd->slave_links, slave_node) {
++#ifdef	POWEDOMAIN_TRACE
++printk(KERN_ERR "%s: genpd_sd_counter_inc\n",__func__);
++#endif
+ 		genpd_sd_counter_inc(link->master);
+ 		genpd->status = GPD_STATE_WAIT_MASTER;
+ 
+@@ -251,6 +312,9 @@ static int __pm_genpd_poweron(struct generic_pm_domain *genpd)
+ 
+  out:
+ 	genpd_set_active(genpd);
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n");
++#endif
+ 
+ 	return 0;
+ 
+@@ -294,20 +358,35 @@ int pm_genpd_name_poweron(const char *domain_name)
+ static int genpd_start_dev_no_timing(struct generic_pm_domain *genpd,
+ 				     struct device *dev)
+ {
++#ifdef  DOMAIN_TRACE
++        return GENPD_DEV_CALLBACK_MON(genpd, int, start, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, start, dev);
++#endif
+ }
+ 
+ static int genpd_save_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_TIMED_CALLBACK_MON(genpd, int, save_state, dev,
++					save_state_latency_ns, "state save");
++#else
+ 	return GENPD_DEV_TIMED_CALLBACK(genpd, int, save_state, dev,
+ 					save_state_latency_ns, "state save");
++#endif
+ }
+ 
+ static int genpd_restore_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_TIMED_CALLBACK_MON(genpd, int, restore_state, dev,
++					restore_state_latency_ns,
++					"state restore");
++#else
+ 	return GENPD_DEV_TIMED_CALLBACK(genpd, int, restore_state, dev,
+ 					restore_state_latency_ns,
+ 					"state restore");
++#endif
+ }
+ 
+ static int genpd_dev_pm_qos_notifier(struct notifier_block *nb,
+@@ -453,6 +532,9 @@ static int pm_genpd_poweroff(struct generic_pm_domain *genpd)
+ 	unsigned int not_suspended;
+ 	int ret = 0;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n");
++#endif
+  start:
+ 	/*
+ 	 * Do not try to power off the domain in the following situations:
+@@ -615,6 +697,9 @@ static int pm_genpd_runtime_suspend(struct device *dev)
+ 	bool (*stop_ok)(struct device *__dev);
+ 	int ret;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n",__func__);
++#endif
+ 	dev_dbg(dev, "%s()\n", __func__);
+ 
+ 	genpd = dev_to_genpd(dev);
+@@ -644,6 +729,9 @@ static int pm_genpd_runtime_suspend(struct device *dev)
+ 	genpd->in_progress--;
+ 	mutex_unlock(&genpd->lock);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n",__func__);
++#endif
+ 	return 0;
+ }
+ 
+@@ -661,6 +749,9 @@ static int pm_genpd_runtime_resume(struct device *dev)
+ 	DEFINE_WAIT(wait);
+ 	int ret;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n",__func__);
++#endif
+ 	dev_dbg(dev, "%s()\n", __func__);
+ 
+ 	genpd = dev_to_genpd(dev);
+@@ -704,6 +795,9 @@ static int pm_genpd_runtime_resume(struct device *dev)
+ 	wake_up_all(&genpd->status_wait_queue);
+ 	mutex_unlock(&genpd->lock);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n",__func__);
++#endif
+ 	return 0;
+ }
+ 
+@@ -760,47 +854,83 @@ static bool pm_genpd_present(struct generic_pm_domain *genpd)
+ static bool genpd_dev_active_wakeup(struct generic_pm_domain *genpd,
+ 				    struct device *dev)
+ {
++#ifdef  DOMAIN_TRACE
++        return GENPD_DEV_CALLBACK_MON(genpd, int, active_wakeup, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, bool, active_wakeup, dev);
++#endif
+ }
+ 
+ static int genpd_suspend_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, suspend, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, suspend, dev);
++#endif
+ }
+ 
+ static int genpd_suspend_late(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, suspend_late, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, suspend_late, dev);
++#endif
+ }
+ 
+ static int genpd_resume_early(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, resume_early, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, resume_early, dev);
++#endif
+ }
+ 
+ static int genpd_resume_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, resume, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, resume, dev);
++#endif
+ }
+ 
+ static int genpd_freeze_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, freeze, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, freeze, dev);
++#endif
+ }
+ 
+ static int genpd_freeze_late(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, freeze_late, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, freeze_late, dev);
++#endif
+ }
+ 
+ static int genpd_thaw_early(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, thaw_early, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, thaw_early, dev);
++#endif
+ }
+ 
+ static int genpd_thaw_dev(struct generic_pm_domain *genpd, struct device *dev)
+ {
++#ifdef	DOMAIN_TRACE
++	return GENPD_DEV_CALLBACK_MON(genpd, int, thaw, dev);
++#else
+ 	return GENPD_DEV_CALLBACK(genpd, int, thaw, dev);
++#endif
+ }
+ 
+ /**
+@@ -819,9 +949,23 @@ static void pm_genpd_sync_poweroff(struct generic_pm_domain *genpd)
+ {
+ 	struct gpd_link *link;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n",__func__);
++#endif
+ 	if (genpd->status == GPD_STATE_POWER_OFF)
++#ifdef	POWEDOMAIN_TRACE
++	{
++		printk(KERN_ERR "%s: GPD_STATE_POWER_OFF\n",__func__);
+ 		return;
++	}
++#else
++		return;
++#endif
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: suspended_count=%d device_count=%d\n",__func__, genpd->suspended_count, genpd->device_count);
++	printk(KERN_ERR "%s: atomic_read=%d (%p)\n",__func__, atomic_read(&genpd->sd_count), &genpd->sd_count);
++#endif
+ 	if (genpd->suspended_count != genpd->device_count
+ 	    || atomic_read(&genpd->sd_count) > 0)
+ 		return;
+@@ -835,6 +979,9 @@ static void pm_genpd_sync_poweroff(struct generic_pm_domain *genpd)
+ 		genpd_sd_counter_dec(link->master);
+ 		pm_genpd_sync_poweroff(link->master);
+ 	}
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n",__func__);
++#endif
+ }
+ 
+ /**
+@@ -850,8 +997,18 @@ static void pm_genpd_sync_poweron(struct generic_pm_domain *genpd)
+ {
+ 	struct gpd_link *link;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start(%p) atmic=%d\n",__func__, &genpd, atomic_read(&genpd->sd_count));
++#endif
+ 	if (genpd->status != GPD_STATE_POWER_OFF)
++#ifdef	POWEDOMAIN_TRACE
++	{
++		printk(KERN_ERR "%s: End(NoPoweroff)\n",__func__);
+ 		return;
++	}
++#else
++		return;
++#endif
+ 
+ 	list_for_each_entry(link, &genpd->slave_links, slave_node) {
+ 		pm_genpd_sync_poweron(link->master);
+@@ -862,6 +1019,10 @@ static void pm_genpd_sync_poweron(struct generic_pm_domain *genpd)
+ 		genpd->power_on(genpd);
+ 
+ 	genpd->status = GPD_STATE_ACTIVE;
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End atmic=%d\n",__func__, atomic_read(&genpd->sd_count));
++#endif
++//	mutex_unlock(&poweron_mutex);
+ }
+ 
+ /**
+@@ -1025,6 +1186,9 @@ static int pm_genpd_suspend_noirq(struct device *dev)
+ 	if (IS_ERR(genpd))
+ 		return -EINVAL;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "***%s: Start\n",__func__);
++#endif
+ 	if (genpd->suspend_power_off
+ 	    || (dev->power.wakeup_path && genpd_dev_active_wakeup(genpd, dev)))
+ 		return 0;
+@@ -1039,6 +1203,9 @@ static int pm_genpd_suspend_noirq(struct device *dev)
+ 	genpd->suspended_count++;
+ 	pm_genpd_sync_poweroff(genpd);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "***%s: End(%d)\n",__func__, genpd->suspended_count);
++#endif
+ 	return 0;
+ }
+ 
+@@ -1052,6 +1219,9 @@ static int pm_genpd_resume_noirq(struct device *dev)
+ {
+ 	struct generic_pm_domain *genpd;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: Start\n",__func__);
++#endif
+ 	dev_dbg(dev, "%s()\n", __func__);
+ 
+ 	genpd = dev_to_genpd(dev);
+@@ -1070,6 +1240,9 @@ static int pm_genpd_resume_noirq(struct device *dev)
+ 	pm_genpd_sync_poweron(genpd);
+ 	genpd->suspended_count--;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n",__func__);
++#endif
+ 	return genpd_start_dev(genpd, dev);
+ }
+ 
+@@ -1255,6 +1428,9 @@ static int pm_genpd_restore_noirq(struct device *dev)
+ {
+ 	struct generic_pm_domain *genpd;
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: start\n",__func__);
++#endif
+ 	dev_dbg(dev, "%s()\n", __func__);
+ 
+ 	genpd = dev_to_genpd(dev);
+@@ -1284,6 +1460,9 @@ static int pm_genpd_restore_noirq(struct device *dev)
+ 			if (genpd->power_off)
+ 				genpd->power_off(genpd);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End0\n",__func__);
++#endif
+ 			return 0;
+ 		}
+ 	}
+@@ -1293,6 +1472,9 @@ static int pm_genpd_restore_noirq(struct device *dev)
+ 
+ 	pm_genpd_sync_poweron(genpd);
+ 
++#ifdef	POWEDOMAIN_TRACE
++	printk(KERN_ERR "%s: End\n",__func__);
++#endif
+ 	return genpd_start_dev(genpd, dev);
+ }
+ 
+@@ -1608,6 +1790,9 @@ int pm_genpd_add_subdomain(struct generic_pm_domain *genpd,
+ {
+ 	struct gpd_link *link;
+ 	int ret = 0;
++#ifdef	POWEDOMAIN_TRACE
++        printk(KERN_ERR "%s: Start\n",__func__);
++#endif
+ 
+ 	if (IS_ERR_OR_NULL(genpd) || IS_ERR_OR_NULL(subdomain)
+ 	    || genpd == subdomain)
+@@ -1647,7 +1832,14 @@ int pm_genpd_add_subdomain(struct generic_pm_domain *genpd,
+ 	link->slave = subdomain;
+ 	list_add_tail(&link->slave_node, &subdomain->slave_links);
+ 	if (subdomain->status != GPD_STATE_POWER_OFF)
++#ifdef	POWEDOMAIN_TRACE
++	{
++        	printk(KERN_ERR "%s: genpd_sd_counter_inc\n",__func__);
+ 		genpd_sd_counter_inc(genpd);
++	}
++#else
++		genpd_sd_counter_inc(genpd);
++#endif
+ 
+  out:
+ 	mutex_unlock(&subdomain->lock);
+@@ -1982,7 +2174,18 @@ static int pm_genpd_default_save_state(struct device *dev)
+ 	if (!cb && dev->driver && dev->driver->pm)
+ 		cb = dev->driver->pm->runtime_suspend;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return 0;
++	}
++#else
+ 	return cb ? cb(dev) : 0;
++#endif
+ }
+ 
+ /**
+@@ -2009,7 +2212,18 @@ static int pm_genpd_default_restore_state(struct device *dev)
+ 	if (!cb && dev->driver && dev->driver->pm)
+ 		cb = dev->driver->pm->runtime_resume;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return 0;
++	}
++#else
+ 	return cb ? cb(dev) : 0;
++#endif
+ }
+ 
+ #ifdef CONFIG_PM_SLEEP
+@@ -2022,7 +2236,18 @@ static int pm_genpd_default_suspend(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.suspend;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_suspend(dev);
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_suspend(dev);
++#endif
+ }
+ 
+ /**
+@@ -2033,7 +2258,18 @@ static int pm_genpd_default_suspend_late(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.suspend_late;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_suspend_late(dev);
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_suspend_late(dev);
++#endif
+ }
+ 
+ /**
+@@ -2044,7 +2280,18 @@ static int pm_genpd_default_resume_early(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.resume_early;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_resume_early(dev);
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_resume_early(dev);
++#endif
+ }
+ 
+ /**
+@@ -2055,7 +2302,18 @@ static int pm_genpd_default_resume(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.resume;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_resume(dev); 
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_resume(dev);
++#endif
+ }
+ 
+ /**
+@@ -2066,7 +2324,18 @@ static int pm_genpd_default_freeze(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.freeze;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_freeze(dev); 
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_freeze(dev);
++#endif
+ }
+ 
+ /**
+@@ -2077,7 +2346,18 @@ static int pm_genpd_default_freeze_late(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.freeze_late;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_freeze_late(dev); 
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_freeze_late(dev);
++#endif
+ }
+ 
+ /**
+@@ -2088,7 +2368,18 @@ static int pm_genpd_default_thaw_early(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.thaw_early;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_thaw_early(dev); 
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_thaw_early(dev);
++#endif
+ }
+ 
+ /**
+@@ -2099,7 +2390,18 @@ static int pm_genpd_default_thaw(struct device *dev)
+ {
+ 	int (*cb)(struct device *__dev) = dev_gpd_data(dev)->ops.thaw;
+ 
++#ifdef	DOMAIN_TRACE
++	if ( cb ) {
++		int rtn;
++		printk(KERN_ERR "**%s: cb=%p\n",__func__, cb);
++		rtn = cb(dev);
++		return rtn;
++	} else {
++		return pm_generic_thaw(dev); 
++	}
++#else
+ 	return cb ? cb(dev) : pm_generic_thaw(dev);
++#endif
+ }
+ 
+ #else /* !CONFIG_PM_SLEEP */
+diff --git a/drivers/base/power/generic_ops.c b/drivers/base/power/generic_ops.c
+index bfd898b..fc77002 100644
+--- a/drivers/base/power/generic_ops.c
++++ b/drivers/base/power/generic_ops.c
+@@ -10,6 +10,8 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/export.h>
+ 
++#undef POWEROPT_TRACE
++
+ #ifdef CONFIG_PM_RUNTIME
+ /**
+  * pm_generic_runtime_idle - Generic runtime idle callback for subsystems.
+@@ -24,6 +26,9 @@ int pm_generic_runtime_idle(struct device *dev)
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
+ 	if (pm && pm->runtime_idle) {
++#ifdef	POWEROPT_TRACE
++		printk(KERN_ERR "##%s: runtime_idle=%p\n",__func__, pm->runtime_idle);
++#endif
+ 		int ret = pm->runtime_idle(dev);
+ 		if (ret)
+ 			return ret;
+@@ -47,7 +52,16 @@ int pm_generic_runtime_suspend(struct device *dev)
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 	int ret;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->runtime_suspend ) {
++		printk(KERN_ERR "##%s: runtime_suspend=%p\n",__func__, pm->runtime_suspend);
++		ret = pm->runtime_suspend(dev);
++	} else {
++		ret = 0;
++	}
++#else
+ 	ret = pm && pm->runtime_suspend ? pm->runtime_suspend(dev) : 0;
++#endif
+ 
+ 	return ret;
+ }
+@@ -66,7 +80,16 @@ int pm_generic_runtime_resume(struct device *dev)
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 	int ret;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->runtime_resume ) {
++		printk(KERN_ERR "##%s: runtime_resume=%p\n",__func__, pm->runtime_resume);
++		ret = pm->runtime_resume(dev);
++	} else {
++		ret = 0;
++	}
++#else
+ 	ret = pm && pm->runtime_resume ? pm->runtime_resume(dev) : 0;
++#endif
+ 
+ 	return ret;
+ }
+@@ -86,7 +109,14 @@ int pm_generic_prepare(struct device *dev)
+ 	int ret = 0;
+ 
+ 	if (drv && drv->pm && drv->pm->prepare)
++#ifdef	POWEROPT_TRACE
++	{
++		printk(KERN_ERR "##%s: drv->pm->prepare=%p\n",__func__, drv->pm->prepare);
+ 		ret = drv->pm->prepare(dev);
++	}
++#else
++		ret = drv->pm->prepare(dev);
++#endif
+ 
+ 	return ret;
+ }
+@@ -99,7 +129,16 @@ int pm_generic_suspend_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->suspend_noirq ) {
++		printk(KERN_ERR "##%s: pm->suspend_noirq=%p\n",__func__, pm->suspend_noirq);
++		return pm->suspend_noirq(dev);
++	} else {
++		return 0;
++	}
++#else	
+ 	return pm && pm->suspend_noirq ? pm->suspend_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_suspend_noirq);
+ 
+@@ -111,7 +150,16 @@ int pm_generic_suspend_late(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->suspend_late ) {
++		printk(KERN_ERR "##%s: pm->suspend_late=%p\n",__func__, pm->suspend_late);
++		return pm->suspend_late(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->suspend_late ? pm->suspend_late(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_suspend_late);
+ 
+@@ -123,7 +171,16 @@ int pm_generic_suspend(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->suspend ) {
++		printk(KERN_ERR "##%s: pm->suspend=%p\n",__func__, pm->suspend);
++		return pm->suspend(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->suspend ? pm->suspend(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_suspend);
+ 
+@@ -135,7 +192,16 @@ int pm_generic_freeze_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->freeze_noirq ) {
++		printk(KERN_ERR "##%s: pm->freeze_noirq=%p\n",__func__, pm->freeze_noirq);
++		return pm->freeze_noirq(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->freeze_noirq ? pm->freeze_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_freeze_noirq);
+ 
+@@ -146,8 +212,16 @@ EXPORT_SYMBOL_GPL(pm_generic_freeze_noirq);
+ int pm_generic_freeze_late(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+-
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->freeze_late ) {
++		printk(KERN_ERR "##%s: pm->freeze_late=%p\n",__func__, pm->freeze_late);
++		return pm->freeze_late(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->freeze_late ? pm->freeze_late(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_freeze_late);
+ 
+@@ -159,7 +233,16 @@ int pm_generic_freeze(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->freeze ) {
++		printk(KERN_ERR "##%s: pm->freeze=%p\n",__func__, pm->freeze);
++		return pm->freeze(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->freeze ? pm->freeze(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_freeze);
+ 
+@@ -171,7 +254,16 @@ int pm_generic_poweroff_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->poweroff_noirq ) {
++		printk(KERN_ERR "##%s: pm->poweroff_noirq=%p\n",__func__, pm->poweroff_noirq);
++		return pm->poweroff_noirq(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->poweroff_noirq ? pm->poweroff_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_poweroff_noirq);
+ 
+@@ -183,7 +275,16 @@ int pm_generic_poweroff_late(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef  POWEROPT_TRACE
++	if ( pm && pm->poweroff_late ) {
++		printk(KERN_ERR "##%s: pm->poweroff_late=%p\n",__func__, pm->poweroff_late);
++		return pm->poweroff_late(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->poweroff_late ? pm->poweroff_late(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_poweroff_late);
+ 
+@@ -195,7 +296,16 @@ int pm_generic_poweroff(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef  POWEROPT_TRACE
++	if ( pm && pm->poweroff ) {
++		printk(KERN_ERR "##%s: pm->poweroff=%p\n",__func__, pm->poweroff);
++		return pm->poweroff(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->poweroff ? pm->poweroff(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_poweroff);
+ 
+@@ -207,7 +317,16 @@ int pm_generic_thaw_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->thaw_noirq ) {
++		printk(KERN_ERR "##%s: pm->thaw_noirq=%p\n",__func__, pm->thaw_noirq);
++		return pm->thaw_noirq(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->thaw_noirq ? pm->thaw_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_thaw_noirq);
+ 
+@@ -219,7 +338,16 @@ int pm_generic_thaw_early(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->thaw_early ) {
++		printk(KERN_ERR "##%s: pm->thaw_early=%p\n",__func__, pm->thaw_early);
++		return pm->thaw_early(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->thaw_early ? pm->thaw_early(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_thaw_early);
+ 
+@@ -231,7 +359,16 @@ int pm_generic_thaw(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->thaw ) {
++		printk(KERN_ERR "##%s: pm->thaw=%p\n",__func__, pm->thaw);
++		return pm->thaw(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->thaw ? pm->thaw(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_thaw);
+ 
+@@ -243,7 +380,16 @@ int pm_generic_resume_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->resume_noirq ) {
++		printk(KERN_ERR "##%s: pm->resume_noirq=%p\n",__func__, pm->resume_noirq);
++		return pm->resume_noirq(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->resume_noirq ? pm->resume_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_resume_noirq);
+ 
+@@ -255,7 +401,16 @@ int pm_generic_resume_early(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->resume_early ) {
++		printk(KERN_ERR "##%s: pm->resume_early=%p\n",__func__, pm->resume_early);
++		return pm->resume_early(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->resume_early ? pm->resume_early(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_resume_early);
+ 
+@@ -267,7 +422,16 @@ int pm_generic_resume(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->resume ) {
++		printk(KERN_ERR "##%s: pm->resume=%p\n",__func__, pm->resume);
++		return pm->resume(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->resume ? pm->resume(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_resume);
+ 
+@@ -279,7 +443,16 @@ int pm_generic_restore_noirq(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->restore_noirq ) {
++		printk(KERN_ERR "##%s: pm->restore_noirq=%p\n",__func__, pm->restore_noirq);
++		return pm->restore_noirq(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->restore_noirq ? pm->restore_noirq(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_restore_noirq);
+ 
+@@ -291,7 +464,16 @@ int pm_generic_restore_early(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->restore_early ) {
++		printk(KERN_ERR "##%s: pm->restore_early=%p\n",__func__, pm->restore_early);
++		return pm->restore_early(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->restore_early ? pm->restore_early(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_restore_early);
+ 
+@@ -303,7 +485,16 @@ int pm_generic_restore(struct device *dev)
+ {
+ 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+ 
++#ifdef	POWEROPT_TRACE
++	if ( pm && pm->restore ) {
++		printk(KERN_ERR "##%s: pm->restore=%p\n",__func__, pm->restore);
++		return pm->restore(dev);
++	} else {
++		return 0;
++	}
++#else
+ 	return pm && pm->restore ? pm->restore(dev) : 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(pm_generic_restore);
+ 
+@@ -318,7 +509,14 @@ void pm_generic_complete(struct device *dev)
+ 	struct device_driver *drv = dev->driver;
+ 
+ 	if (drv && drv->pm && drv->pm->complete)
++#ifdef	POWEROPT_TRACE
++	{
++		printk(KERN_ERR "##%s: drv->pm->complete=%p\n",__func__, drv->pm->complete);
++		drv->pm->complete(dev);
++	}
++#else
+ 		drv->pm->complete(dev);
++#endif
+ 
+ 	/*
+ 	 * Let runtime PM try to suspend devices that haven't been in use before
+diff --git a/drivers/base/power/main.c b/drivers/base/power/main.c
+index 1eeee09..fe23f6c 100644
+--- a/drivers/base/power/main.c
++++ b/drivers/base/power/main.c
+@@ -36,6 +36,8 @@
+ #include "../base.h"
+ #include "power.h"
+ 
++#undef	POWERMAIN_TRACE
++
+ typedef int (*pm_callback_t)(struct device *);
+ 
+ /*
+@@ -386,6 +388,9 @@ static int dpm_run_callback(pm_callback_t cb, struct device *dev,
+ 	calltime = initcall_debug_start(dev);
+ 
+ 	pm_dev_dbg(dev, state, info);
++#ifdef	POWERMAIN_TRACE
++	printk(KERN_ERR "--%s: cb=%p\n", __func__, cb);
++#endif
+ 	error = cb(dev);
+ 	suspend_report_result(cb, error);
+ 
+@@ -1099,6 +1104,9 @@ static int legacy_suspend(struct device *dev, pm_message_t state,
+ 
+ 	calltime = initcall_debug_start(dev);
+ 
++#ifdef	POWERMAIN_TRACE
++	printk(KERN_ERR "--%s: cb=%p\n", __func__, cb);
++#endif
+ 	error = cb(dev, state);
+ 	suspend_report_result(cb, error);
+ 
+diff --git a/drivers/clk/clk-mb86s70.c b/drivers/clk/clk-mb86s70.c
+index 07952cf..2c678e2 100644
+--- a/drivers/clk/clk-mb86s70.c
++++ b/drivers/clk/clk-mb86s70.c
+@@ -22,6 +22,7 @@
+ #include <linux/module.h>
+ #include <linux/scb_mhu_api.h>
+ #include <linux/mailbox_client.h>
++#include <linux/suspend.h>
+ 
+ #define to_crg_clk(p) container_of(p, struct crg_clk, hw)
+ 
+@@ -126,15 +127,33 @@ static int crg_gate_control(struct clk_hw *hw, int en)
+ 	return ret;
+ }
+ 
++
+ static int crg_port_prepare(struct clk_hw *hw)
+ {
++#if 1	/* WR (SKIP) */
++	if (skip_mhu || is_hibernation_flag() ) {
++		printk(KERN_ERR "%s: skip\n",__func__);
++		return 0;
++	} else {
++		return crg_gate_control(hw, 1);
++	}
++#else
+ 	return skip_mhu ? 0 : crg_gate_control(hw, 1);
++#endif
+ }
+ 
+ static void crg_port_unprepare(struct clk_hw *hw)
+ {
++#if 1	/* WR (SKIP) */
++	if (skip_mhu || is_hibernation_flag() )
++	{
++		printk(KERN_ERR "%s: skip\n",__func__);
++	} else 
++		crg_gate_control(hw, 0);
++#else
+ 	if (!skip_mhu)
+ 		crg_gate_control(hw, 0);
++#endif
+ }
+ 
+ static int crg_rate_control(struct clk_hw *hw, int set, unsigned long *rate)
+diff --git a/drivers/dma/mb8ac0300-hdmac.c b/drivers/dma/mb8ac0300-hdmac.c
+index a56f734..3e1d371 100644
+--- a/drivers/dma/mb8ac0300-hdmac.c
++++ b/drivers/dma/mb8ac0300-hdmac.c
+@@ -897,8 +897,12 @@ static int mb8x_hdmac_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops mb8x_hdmac_ops = {
++#if 1  /* WR (hibernate) */
++        SET_SYSTEM_SLEEP_PM_OPS(mb8x_hdmac_suspend, mb8x_hdmac_resume)
++#else  /* WR (hibernate) */
+ 	.suspend = mb8x_hdmac_suspend,
+ 	.resume = mb8x_hdmac_resume,
++#endif	/* WR (hibernate) */
+ 	SET_RUNTIME_PM_OPS(mb8x_hdmac_runtime_suspend
+ 		, mb8x_hdmac_runtime_resume, NULL)
+ };
+diff --git a/drivers/dma/pl330.c b/drivers/dma/pl330.c
+index 1fcd708..7a134fa 100644
+--- a/drivers/dma/pl330.c
++++ b/drivers/dma/pl330.c
+@@ -505,7 +505,7 @@ struct pl330_dmac {
+ 	/* Maximum possible events/irqs */
+ 	int			events[32];
+ 	/* BUS address of MicroCode buffer */
+-	u32			mcode_bus;
++	dma_addr_t		mcode_bus;
+ 	/* CPU address of MicroCode buffer */
+ 	void			*mcode_cpu;
+ 	/* List of all Channel threads */
+@@ -577,6 +577,7 @@ struct dma_pl330_chan {
+ struct dma_pl330_dmac {
+ 	struct pl330_info pif;
+ 
++	struct device_dma_parameters dma_parms;
+ 	/* DMA-Engine Device */
+ 	struct dma_device ddma;
+ 
+@@ -1258,9 +1259,15 @@ static inline int _ldst_memtomem(unsigned dry_run, u8 buf[],
+ 
+ 	/* check lock-up free version */
+ 	if (get_revision(pcfg->periph_id) >= PERIPH_REV_R1P0) {
++		struct pl330_xfer *x = pxs->x;
+ 		while (cyc--) {
+-			off += _emit_LD(dry_run, &buf[off], ALWAYS);
+-			off += _emit_ST(dry_run, &buf[off], ALWAYS);
++			/* Mark MEMSET_ZERO by the hack */
++			if (x->src_addr == x->dst_addr) {
++				off += _emit_STZ(dry_run, &buf[off]);
++			} else {
++				off += _emit_LD(dry_run, &buf[off], ALWAYS);
++				off += _emit_ST(dry_run, &buf[off], ALWAYS);
++			}
+ 		}
+ 	} else {
+ 		while (cyc--) {
+@@ -2546,12 +2553,9 @@ static dma_cookie_t pl330_tx_submit(struct dma_async_tx_descriptor *tx)
+ 
+ static inline void _init_desc(struct dma_pl330_desc *desc)
+ {
+-	desc->pchan = NULL;
+ 	desc->req.x = &desc->px;
+ 	desc->req.token = desc;
+ 	desc->rqcfg.swap = SWAP_NO;
+-	desc->rqcfg.privileged = 0;
+-	desc->rqcfg.insnaccess = 0;
+ 	desc->rqcfg.scctl = SCCTRL0;
+ 	desc->rqcfg.dcctl = DCCTRL0;
+ 	desc->req.cfg = &desc->rqcfg;
+@@ -2571,7 +2575,7 @@ static int add_desc(struct dma_pl330_dmac *pdmac, gfp_t flg, int count)
+ 	if (!pdmac)
+ 		return 0;
+ 
+-	desc = kmalloc(count * sizeof(*desc), flg);
++	desc = kcalloc(count, sizeof(*desc), flg);
+ 	if (!desc)
+ 		return 0;
+ 
+@@ -2795,6 +2799,46 @@ static struct dma_async_tx_descriptor *pl330_prep_dma_cyclic(
+ }
+ 
+ static struct dma_async_tx_descriptor *
++pl330_prep_interleaved_dma(struct dma_chan *chan,
++		struct dma_interleaved_template *xt, unsigned long flags)
++{
++	struct dma_pl330_desc *desc;
++	struct dma_pl330_chan *pch = to_pchan(chan);
++	struct pl330_info *pi;
++	dma_addr_t dst, src;
++	size_t len = xt->sgl[0].size; /* must be a ^2 */
++
++	if (unlikely(!pch))
++		return NULL;
++
++	/* Strictly allow only MEMSET for now */
++	if (xt->dir != DMA_MEM_TO_MEM || xt->src_inc || !xt->dst_inc ||
++			(xt->frame_size != 1) || xt->sgl[0].icg) {
++		dev_err(pch->dmac->pif.dev, "Doesn't seem like MEMSET!\n");
++		return NULL;
++	}
++
++	pi = &pch->dmac->pif;
++
++	src = xt->src_start;
++	dst = xt->dst_start;
++
++	desc = __pl330_prep_dma_memcpy(pch, dst, src, len * xt->numf);
++	if (!desc)
++		return NULL;
++
++	desc->req.rqtype = MEMTOMEM;
++	desc->rqcfg.src_inc = xt->src_inc ? 1 : 0;
++	desc->rqcfg.dst_inc = xt->dst_inc ? 1 : 0;
++	desc->rqcfg.brst_size = __ffs(len); /* 4bytes ? */
++	desc->rqcfg.brst_len = get_burst_len(desc, len * xt->numf);
++
++	desc->txd.flags = flags;
++
++	return &desc->txd;
++}
++
++static struct dma_async_tx_descriptor *
+ pl330_prep_dma_memcpy(struct dma_chan *chan, dma_addr_t dst,
+ 		dma_addr_t src, size_t len, unsigned long flags)
+ {
+@@ -2929,6 +2973,7 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
+ 	struct resource *res;
+ 	int i, ret, irq;
+ 	int num_chan;
++	const __be32 *prop;
+ 
+ 	pdat = adev->dev.platform_data;
+ 
+@@ -3013,10 +3058,13 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
+ 		pd->cap_mask = pdat->cap_mask;
+ 	} else {
+ 		dma_cap_set(DMA_MEMCPY, pd->cap_mask);
++		dma_cap_set(DMA_INTERLEAVE, pd->cap_mask);
+ 		if (pi->pcfg.num_peri) {
+ 			dma_cap_set(DMA_SLAVE, pd->cap_mask);
+ 			dma_cap_set(DMA_CYCLIC, pd->cap_mask);
+ 			dma_cap_set(DMA_PRIVATE, pd->cap_mask);
++		} else {
++			pd->copy_align = __ffs(pi->pcfg.data_buf_dep);
+ 		}
+ 	}
+ 
+@@ -3024,11 +3072,21 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
+ 	pd->device_free_chan_resources = pl330_free_chan_resources;
+ 	pd->device_prep_dma_memcpy = pl330_prep_dma_memcpy;
+ 	pd->device_prep_dma_cyclic = pl330_prep_dma_cyclic;
++	pd->device_prep_interleaved_dma = pl330_prep_interleaved_dma;
+ 	pd->device_tx_status = pl330_tx_status;
+ 	pd->device_prep_slave_sg = pl330_prep_slave_sg;
+ 	pd->device_control = pl330_control;
+ 	pd->device_issue_pending = pl330_issue_pending;
+ 
++	pd->dev->dma_parms = &pdmac->dma_parms;
++	/*
++	 * This is the limit for transfers with a buswidth of 1, larger
++	 * buswidths will have larger limits.
++	 */
++	ret = dma_set_max_seg_size(pd->dev, 1900800);
++	if (ret)
++		dev_err(&adev->dev, "unable to set the seg size\n");
++
+ 	ret = dma_async_device_register(pd);
+ 	if (ret) {
+ 		dev_err(&adev->dev, "unable to register DMAC\n");
+@@ -3042,6 +3100,9 @@ pl330_probe(struct amba_device *adev, const struct amba_id *id)
+ 			dev_err(&adev->dev,
+ 			"unable to register DMA to the generic DT DMA helpers\n");
+ 		}
++		prop = of_get_property(adev->dev.of_node, "copy-align", NULL);
++		if (prop)
++			pd->copy_align = __ffs(be32_to_cpu(*prop));
+ 	}
+ 
+ 	dev_info(&adev->dev,
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index 536365e..ae79113 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -28,6 +28,7 @@
+ #include <linux/slab.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/debugfs.h>
++#include <linux/suspend.h>
+ 
+ /*
+  * Only first 8bits of a register correspond to each pin,
+@@ -49,8 +50,12 @@ struct mb86s70_gpio_chip {
+ 	u32 *ddr_reg_save;
+ 	u32 *pfr_reg_save;
+ 	int resume_dis_pin[N_GPIO + 1];
++#if 1	/* WR add (checksum) */
++	u32 checksum;
++#endif	/* WR Add (checksum) */
+ };
+ 
++
+ static inline struct mb86s70_gpio_chip *chip_to_mb86s70(struct gpio_chip *gc)
+ {
+ 	return container_of(gc, struct mb86s70_gpio_chip, gc);
+@@ -279,6 +284,9 @@ static int mb86s70_gpio_probe(struct platform_device *pdev)
+ 	gchip->gc.owner = THIS_MODULE;
+ 	gchip->gc.dev = &pdev->dev;
+ 	gchip->gc.base = base;
++#if 1   /* WR add (checksum) */
++        gchip->checksum=0xffffffff;
++#endif
+ 
+ 	gchip->pdr_reg_save = devm_kzalloc(&pdev->dev,
+ 		sizeof(u32) * gchip->gc.ngpio / 8, GFP_KERNEL);
+@@ -355,13 +363,25 @@ static int mb86s70_gpio_pm_suspend(struct device *dev)
+ 	if (!gchip)
+ 		return 0;
+ 
++#if 1	/* WR add(hibernate) */
++	if ( is_suspend_bypass() ) {
++		printk(KERN_ERR "%s: skip\n",__func__);
++		return 0;
++	}
++#endif	/* WR add(hibernate) */
+ 	/* 8 pin of group */
+ 	ngpio_gp = gchip->gc.ngpio / 8;
+ 
++#if 1	/* WR add (checksum) */
++	gchip->checksum=0;
++#endif
+ 	while (cnt < ngpio_gp) {
+ 		gchip->pdr_reg_save[cnt] = readb(gchip->base + PDR(id));
+ 		gchip->ddr_reg_save[cnt] = readb(gchip->base + DDR(id));
+ 		gchip->pfr_reg_save[cnt] = readb(gchip->base + PFR(id));
++#if 1	/* WR add (checksum) */	
++		gchip->checksum += gchip->pdr_reg_save[cnt] + gchip->ddr_reg_save[cnt] + gchip->pfr_reg_save[cnt];
++#endif
+ 		id = id + 8;
+ 		cnt++;
+ 	};
+@@ -377,14 +397,29 @@ static int mb86s70_gpio_pm_resume(struct device *dev)
+ 	u32 id = 0, cnt = 0, ngpio_gp;
+ 	u32 en_pin_mask[4] = {0}, rd_pfr, rd_pdr, rd_ddr;
+ 	u32 pin_gp;
+-
++#if 1	/* WR add (checksum) */
++	u32 tmp_checksum=0;
++#endif
+ 	if (!gchip)
+ 		return 0;
+ 
+ 	ngpio_gp = gchip->gc.ngpio / 8;
+-
++#if 1	/* WR add (checksum) */
++	cnt = 0;
++	while (cnt < ngpio_gp) {
++		tmp_checksum += gchip->pdr_reg_save[cnt] + gchip->ddr_reg_save[cnt] + gchip->pfr_reg_save[cnt];
++		cnt++;
++	};
++	if ( tmp_checksum != gchip->checksum ) {
++		printk(KERN_ERR "%s: checksum error. %x->%x\n",__func__,gchip->checksum, tmp_checksum);
++		return -1;
++	} else {
++		printk(KERN_ERR "%s: checksum ok.\n",__func__);
++	}
++#endif
+ 	clk_prepare_enable(gchip->clk);
+ 
++
+ 	while (gchip->resume_dis_pin[cnt] >= 0) {
+ 		if ( gchip->resume_dis_pin[cnt] > N_GPIO)
+ 			gchip->resume_dis_pin[cnt] -= gchip->gc.base;
+@@ -404,6 +439,16 @@ static int mb86s70_gpio_pm_resume(struct device *dev)
+ 		rd_pdr = readb(gchip->base + PDR(id));
+ 		rd_ddr = readb(gchip->base + DDR(id));
+ 
++#if 0	/* WR BUG?? */
++		/* keep disable resume pin value */
++		rd_pfr &= en_pin_mask[cnt];
++		rd_pdr &= en_pin_mask[cnt];
++		rd_ddr &= en_pin_mask[cnt];
++		/* clear disable resume pin value from suspend reserved */
++		gchip->pfr_reg_save[cnt] &= ~en_pin_mask[cnt];
++		gchip->pdr_reg_save[cnt] &= ~en_pin_mask[cnt];
++		gchip->ddr_reg_save[cnt] &= ~en_pin_mask[cnt];
++#else
+ 		/* keep disable resume pin value */
+ 		rd_pfr &= ~en_pin_mask[cnt];
+ 		rd_pdr &= ~en_pin_mask[cnt];
+@@ -413,6 +458,7 @@ static int mb86s70_gpio_pm_resume(struct device *dev)
+ 		gchip->pfr_reg_save[cnt] &= en_pin_mask[cnt];
+ 		gchip->pdr_reg_save[cnt] &= en_pin_mask[cnt];
+ 		gchip->ddr_reg_save[cnt] &= en_pin_mask[cnt];
++#endif
+ 
+ 		gchip->pfr_reg_save[cnt] |= rd_pfr;
+ 		gchip->pdr_reg_save[cnt] |= rd_pdr;
+@@ -440,8 +486,12 @@ static int mb86s70_gpio_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops mb86s70_gpio_pm_ops = {
++#if 1	/* WR (hibernate) */
++	SET_SYSTEM_SLEEP_PM_OPS(mb86s70_gpio_pm_suspend, mb86s70_gpio_pm_resume)
++#else
+ 	.resume = &mb86s70_gpio_pm_resume,
+ 	.suspend = &mb86s70_gpio_pm_suspend,
++#endif
+ #ifdef CONFIG_PM_RUNTIME
+ 	SET_RUNTIME_PM_OPS(
+ 	mb86s70_gpio_runtime_suspend,
+diff --git a/drivers/usb/dwc3/Makefile b/drivers/usb/dwc3/Makefile
+index 7aa227b..a6ea81b 100644
+--- a/drivers/usb/dwc3/Makefile
++++ b/drivers/usb/dwc3/Makefile
+@@ -33,8 +33,8 @@ endif
+ # PCI doesn't provide nops if CONFIG_PCI isn't enabled.
+ ##
+ 
+-obj-$(CONFIG_USB_DWC3)		+= dwc3-omap.o
+-obj-$(CONFIG_USB_DWC3)		+= dwc3-exynos.o
++#obj-$(CONFIG_USB_DWC3)		+= dwc3-omap.o
++#obj-$(CONFIG_USB_DWC3)		+= dwc3-exynos.o
+ obj-$(CONFIG_USB_DWC3)		+= dwc3-mb86s70.o
+ 
+ ifneq ($(CONFIG_PCI),)
+diff --git a/drivers/usb/host/f_usb20ho_hcd.c b/drivers/usb/host/f_usb20ho_hcd.c
+index b9ce062..3817d72 100644
+--- a/drivers/usb/host/f_usb20ho_hcd.c
++++ b/drivers/usb/host/f_usb20ho_hcd.c
+@@ -29,6 +29,7 @@
+ #include <linux/pm_runtime.h>
+ #include <linux/usb.h>
+ #include <linux/usb/hcd.h>
++#include <linux/suspend.h>
+ #include "f_usb20ho_hcd.h"
+ 
+ /* to be confirmed this unknow value */
+@@ -309,6 +310,12 @@ static int f_usb20ho_hcd_suspend(struct device *dev)
+ 
+ 	if (pm_runtime_status_suspended(dev))
+ 		return 0;
++#if 1  /* WR add(hibernate) */
++	if ( is_suspend_bypass() ) {
++		printk(KERN_ERR "%s: skip\n",__func__);
++		return 0;
++	}
++#endif	/* WR add(hibernate) */
+ 
+ 	dev_dbg(dev, "%s() is ended.\n", __func__);
+ 	return f_usb20ho_runtime_suspend(dev);
+@@ -326,8 +333,12 @@ static int f_usb20ho_hcd_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops f_usb20ho_hcd_ops = {
++#if 1	/* WR (hibernate) */
++	SET_SYSTEM_SLEEP_PM_OPS(f_usb20ho_hcd_suspend, f_usb20ho_hcd_resume)
++#else	/* WR (hibernate) */
+ 	.suspend =  f_usb20ho_hcd_suspend,
+ 	.resume = f_usb20ho_hcd_resume,
++#endif	/* WR (hibernate) */
+ 	SET_RUNTIME_PM_OPS(f_usb20ho_runtime_suspend
+ 		, f_usb20ho_runtime_resume, NULL)
+ };
+diff --git a/drivers/usb/host/xhci-plat.c b/drivers/usb/host/xhci-plat.c
+index 1c34cff..ed789d9 100644
+--- a/drivers/usb/host/xhci-plat.c
++++ b/drivers/usb/host/xhci-plat.c
+@@ -14,6 +14,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/module.h>
+ #include <linux/slab.h>
++#include <linux/suspend.h>
+ 
+ #include "xhci.h"
+ 
+@@ -201,6 +202,13 @@ static int xhci_plat_suspend(struct device *dev)
+ 	struct usb_hcd	*hcd = dev_get_drvdata(dev);
+ 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
+ 
++#if 1   /* WR add(hibernate) */
++	if ( is_suspend_bypass() ) {
++		printk(KERN_ERR "%s: skip\n",__func__);
++		return 0;
++	}
++#endif  /* WR add(hibernate) */
++
+ 	return xhci_suspend(xhci);
+ }
+ 
+diff --git a/include/linux/suspend.h b/include/linux/suspend.h
+index d4e3f16..e2067d0 100644
+--- a/include/linux/suspend.h
++++ b/include/linux/suspend.h
+@@ -299,6 +299,10 @@ struct platform_hibernation_ops {
+ 	int (*pre_restore)(void);
+ 	void (*restore_cleanup)(void);
+ 	void (*recover)(void);
++#if 1	/* WR add */
++	int (*encryption)(void);
++	int (*composite)(void);
++#endif	/* WR add */
+ };
+ 
+ #ifdef CONFIG_HIBERNATION
+@@ -320,6 +324,11 @@ extern unsigned long get_safe_page(gfp_t gfp_mask);
+ extern void hibernation_set_ops(const struct platform_hibernation_ops *ops);
+ extern int hibernate(void);
+ extern bool system_entering_hibernation(void);
++#ifdef	CONFIG_ARCH_MB86S70	/* WR add */
++extern int is_hibernation_flag(void);
++extern int is_suspend_bypass(void);
++extern void suspend_set(void);
++#endif	/* WR add */
+ #else /* CONFIG_HIBERNATION */
+ static inline void register_nosave_region(unsigned long b, unsigned long e) {}
+ static inline void register_nosave_region_late(unsigned long b, unsigned long e) {}
+@@ -330,6 +339,11 @@ static inline void swsusp_unset_page_free(struct page *p) {}
+ static inline void hibernation_set_ops(const struct platform_hibernation_ops *ops) {}
+ static inline int hibernate(void) { return -ENOSYS; }
+ static inline bool system_entering_hibernation(void) { return false; }
++#ifdef	CONFIG_ARCH_MB86S70	/* WR add */
++static inline int is_hibernation_flag(void) { return 0; }
++static inline int is_suspend_bypass(void) { return 0; }
++static inline void suspend_set(void) {}
++#endif	/* WR add */
+ #endif /* CONFIG_HIBERNATION */
+ 
+ /* Hibernation and suspend events */
+diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
+index b2a966a..5582a30 100644
+--- a/kernel/power/hibernate.c
++++ b/kernel/power/hibernate.c
+@@ -30,7 +30,10 @@
+ #include <linux/genhd.h>
+ 
+ #include "power.h"
+-
++#ifdef	CONFIG_ARCH_MB86S70
++#include <linux/of.h>
++#endif
++#undef	HIBERNATE_TRACE
+ 
+ static int nocompress;
+ static int noresume;
+@@ -61,6 +64,10 @@ bool freezer_test_done;
+ 
+ static const struct platform_hibernation_ops *hibernation_ops;
+ 
++#ifdef	CONFIG_ARCH_MB86S70
++static int hibernation_flag=0;
++int hibernation_startup=0;
++#endif
+ /**
+  * hibernation_set_ops - Set the global hibernate operations.
+  * @ops: Hibernation operations to use in subsequent hibernation transitions.
+@@ -217,6 +224,20 @@ static void platform_recover(int platform_mode)
+ 		hibernation_ops->recover();
+ }
+ 
++#if 1	/* WR ADD */
++static int platform_encryption(int platform_mode)
++{
++	if (platform_mode && hibernation_ops && hibernation_ops->encryption)
++		return hibernation_ops->encryption();
++	return 0;
++}
++static int platform_composite(int platform_mode)
++{
++	if (platform_mode && hibernation_ops && hibernation_ops->composite)
++		return hibernation_ops->composite();
++	return 0;
++}
++#endif	/* WR ADD */
+ /**
+  * swsusp_show_speed - Print time elapsed between two events during hibernation.
+  * @start: Starting event.
+@@ -258,7 +279,14 @@ static int create_image(int platform_mode)
+ {
+ 	int error;
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: Start(platform_mode=%d)\n",__func__, platform_mode);
++	printk(KERN_ERR "++%s: dpm_suspend_end Start(PMSG_FREEZE)\n",__func__);
++#endif
+ 	error = dpm_suspend_end(PMSG_FREEZE);
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_suspend_end End\n",__func__);
++#endif
+ 	if (error) {
+ 		printk(KERN_ERR "PM: Some devices failed to power down, "
+ 			"aborting hibernation\n");
+@@ -269,7 +297,13 @@ static int create_image(int platform_mode)
+ 	if (error || hibernation_test(TEST_PLATFORM))
+ 		goto Platform_finish;
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: disable_nonboot_cpus Start\n",__func__);
++#endif
+ 	error = disable_nonboot_cpus();
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: disable_nonboot_cpus End\n",__func__);
++#endif
+ 	if (error || hibernation_test(TEST_CPUS))
+ 		goto Enable_cpus;
+ 
+@@ -277,7 +311,13 @@ static int create_image(int platform_mode)
+ 
+ 	system_state = SYSTEM_SUSPEND;
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: syscore_suspend Start\n",__func__);
++#endif
+ 	error = syscore_suspend();
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: syscore_suspend End\n",__func__);
++#endif
+ 	if (error) {
+ 		printk(KERN_ERR "PM: Some system devices failed to power down, "
+ 			"aborting hibernation\n");
+@@ -301,7 +341,13 @@ static int create_image(int platform_mode)
+ 	}
+ 
+  Power_up:
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: syscore_resume Start\n",__func__);
++#endif
+ 	syscore_resume();
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: syscore_resume End\n",__func__);
++#endif
+ 
+  Enable_irqs:
+ 	system_state = SYSTEM_RUNNING;
+@@ -313,9 +359,18 @@ static int create_image(int platform_mode)
+  Platform_finish:
+ 	platform_finish(platform_mode);
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_resume_start Start(in_suspend=%d)\n",__func__,in_suspend);
++#endif
+ 	dpm_resume_start(in_suspend ?
+ 		(error ? PMSG_RECOVER : PMSG_THAW) : PMSG_RESTORE);
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_resume_start End\n",__func__);
++#endif
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: End \n",__func__);
++#endif
+ 	return error;
+ }
+ 
+@@ -330,6 +385,9 @@ int hibernation_snapshot(int platform_mode)
+ 	pm_message_t msg;
+ 	int error;
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Start(platform_mode=%d)\n",__func__, platform_mode);
++#endif
+ 	error = platform_begin(platform_mode);
+ 	if (error)
+ 		goto Close;
+@@ -353,7 +411,19 @@ int hibernation_snapshot(int platform_mode)
+ 		goto Thaw;
+ 	}
+ 
++#ifdef	CONFIG_ARCH_MB86S70	/* WR ADD */
++	hibernation_flag=1;
++#endif
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: hibernation_flag=1\n",__func__);
++#endif
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: dpm_prepare Start(PMSG_FREEZE)\n",__func__);
++#endif
+ 	error = dpm_prepare(PMSG_FREEZE);
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: dpm_prepare End\n",__func__);
++#endif
+ 	if (error) {
+ 		dpm_complete(PMSG_RECOVER);
+ 		goto Thaw;
+@@ -363,12 +433,26 @@ int hibernation_snapshot(int platform_mode)
+ 	ftrace_stop();
+ 	pm_restrict_gfp_mask();
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_suspend Start(PMSG_FREEZE)\n",__func__);
++#endif
+ 	error = dpm_suspend(PMSG_FREEZE);
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_suspend End\n",__func__);
++#endif
+ 
+ 	if (error || hibernation_test(TEST_DEVICES))
+ 		platform_recover(platform_mode);
+ 	else
++#ifdef	HIBERNATE_TRACE
++	{
++		printk(KERN_ERR "++%s: create_image Start(platform_mode=%d)\n",__func__,platform_mode);
+ 		error = create_image(platform_mode);
++		printk(KERN_ERR "++%s: create_image End\n",__func__);
++	}
++#else
++		error = create_image(platform_mode);
++#endif
+ 
+ 	/*
+ 	 * In the case that we call create_image() above, the control
+@@ -381,7 +465,19 @@ int hibernation_snapshot(int platform_mode)
+ 		swsusp_free();
+ 
+ 	msg = in_suspend ? (error ? PMSG_RECOVER : PMSG_THAW) : PMSG_RESTORE;
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: dpm_resume Start(in_suspend=%d msg.event=%d)\n",__func__, in_suspend, msg.event);
++#endif
+ 	dpm_resume(msg);
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: dpm_resume End\n",__func__);
++#endif
++#ifdef	CONFIG_ARCH_MB86S70	/* WR ADD */
++	hibernation_flag=0;
++#endif
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: hibernation_flag=0\n",__func__);
++#endif
+ 
+ 	if (error || !in_suspend)
+ 		pm_restore_gfp_mask();
+@@ -392,6 +488,13 @@ int hibernation_snapshot(int platform_mode)
+ 
+  Close:
+ 	platform_end(platform_mode);
++#ifdef	CONFIG_ARCH_MB86S70	/* WR ADD */
++	hibernation_startup=1;
++#endif
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: hibernation_startup=on\n",__func__);
++	printk(KERN_ERR "++%s: End\n",__func__);
++#endif
+ 	return error;
+ 
+  Thaw:
+@@ -414,17 +517,29 @@ static int resume_target_kernel(bool platform_mode)
+ {
+ 	int error;
+ 
++#ifdef	HIBERNATE_TRACE
++        printk(KERN_ERR "++%s: dpm_suspend_end Start(PMSG_QUIESCE)\n",__func__);
++#endif
+ 	error = dpm_suspend_end(PMSG_QUIESCE);
++#ifdef	HIBERNATE_TRACE
++        printk(KERN_ERR "++%s: dpm_suspend_end End\n",__func__);
++#endif
+ 	if (error) {
+ 		printk(KERN_ERR "PM: Some devices failed to power down, "
+ 			"aborting resume\n");
+ 		return error;
+ 	}
+ 
++#ifdef	HIBERNATE_TRACE
++        printk(KERN_ERR "++%s: platform_pre_restore Start(platform_mode=%d)\n",__func__, platform_mode);
++#endif
+ 	error = platform_pre_restore(platform_mode);
+ 	if (error)
+ 		goto Cleanup;
+ 
++#ifdef	HIBERNATE_TRACE
++        printk(KERN_ERR "++%s: disable_nonboot_cpus Start.\n",__func__);
++#endif
+ 	error = disable_nonboot_cpus();
+ 	if (error)
+ 		goto Enable_cpus;
+@@ -432,6 +547,9 @@ static int resume_target_kernel(bool platform_mode)
+ 	local_irq_disable();
+ 	system_state = SYSTEM_SUSPEND;
+ 
++#ifdef	HIBERNATE_TRACE
++        printk(KERN_ERR "++%s: syscore_suspend Start.\n",__func__);
++#endif
+ 	error = syscore_suspend();
+ 	if (error)
+ 		goto Enable_irqs;
+@@ -474,7 +592,6 @@ static int resume_target_kernel(bool platform_mode)
+ 	platform_restore_cleanup(platform_mode);
+ 
+ 	dpm_resume_start(PMSG_RECOVER);
+-
+ 	return error;
+ }
+ 
+@@ -489,11 +606,26 @@ int hibernation_restore(int platform_mode)
+ {
+ 	int error;
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: Start(platform_mode=%d)\n",__func__, platform_mode);
++#endif
+ 	pm_prepare_console();
+ 	suspend_console();
+ 	ftrace_stop();
+ 	pm_restrict_gfp_mask();
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: hibernation_flag=2.\n",__func__);
++#endif
++#ifdef	CONFIG_ARCH_MB86S70	/* WR ADD */
++	hibernation_flag=2;
++#endif
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_suspend_start Start(PMSG_QUIESCE)\n",__func__);
++#endif
+ 	error = dpm_suspend_start(PMSG_QUIESCE);
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: dpm_suspend_start End\n",__func__);
++#endif
+ 	if (!error) {
+ 		error = resume_target_kernel(platform_mode);
+ 		/*
+@@ -508,6 +640,9 @@ int hibernation_restore(int platform_mode)
+ 	ftrace_start();
+ 	resume_console();
+ 	pm_restore_console();
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++: hibernation_restore End.\n");
++#endif
+ 	return error;
+ }
+ 
+@@ -605,7 +740,11 @@ static void power_down(void)
+ 		kernel_restart(NULL);
+ 		break;
+ 	case HIBERNATION_PLATFORM:
++#if 1	/* WR Change */
++		kernel_power_off();
++#else
+ 		hibernation_platform_enter();
++#endif
+ 	case HIBERNATION_SHUTDOWN:
+ 		kernel_power_off();
+ 		break;
+@@ -644,6 +783,9 @@ static void power_down(void)
+ int hibernate(void)
+ {
+ 	int error;
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: Start\n",__func__);
++#endif
+ 
+ 	lock_system_sleep();
+ 	/* The snapshot device should not be opened while we're running */
+@@ -670,6 +812,9 @@ int hibernate(void)
+ 	if (error)
+ 		goto Free_bitmaps;
+ 
++#ifdef	HIBERNATE_TRACE
++	printk(KERN_ERR "++%s: hibernation_snapshot Start\n",__func__);
++#endif
+ 	error = hibernation_snapshot(hibernation_mode == HIBERNATION_PLATFORM);
+ 	if (error || freezer_test_done)
+ 		goto Thaw;
+@@ -684,11 +829,32 @@ int hibernate(void)
+ 		else
+ 		        flags |= SF_CRC32_MODE;
+ 
++#ifdef	HIBERNATE_TRACE
++		printk(KERN_ERR "++%s: swsusp_write Start\n",__func__);
++#endif
+ 		pr_debug("PM: writing image.\n");
+ 		error = swsusp_write(flags);
++#ifdef	HIBERNATE_TRACE
++		printk(KERN_ERR "++%s: swsusp_write End\n",__func__);
++#endif
++#if 1	/* WR ADD */
++		error = platform_encryption(hibernation_mode == HIBERNATION_PLATFORM);
++        	if (error){
++			printk(KERN_ERR "++%s: platform_encryption Erros\n",__func__);
++                	goto Thaw;
++		}
++#endif	/* WR ADD */
+ 		swsusp_free();
+ 		if (!error)
++#ifdef	HIBERNATE_TRACE
++		{
++			printk(KERN_ERR "++%s: power_down Start\n",__func__);
++			power_down();
++			printk(KERN_ERR "++%s: power_down End\n",__func__);
++		}
++#else
+ 			power_down();
++#endif
+ 		in_suspend = 0;
+ 		pm_restore_gfp_mask();
+ 	} else {
+@@ -739,6 +905,9 @@ static int software_resume(void)
+ 	if (noresume)
+ 		return 0;
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Start\n",__func__);
++#endif
+ 	/*
+ 	 * name_to_dev_t() below takes a sysfs buffer mutex when sysfs
+ 	 * is configured into the kernel. Since the regular hibernate
+@@ -759,6 +928,9 @@ static int software_resume(void)
+ 		goto Unlock;
+ 	}
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Checking hibernation image partition %s\n", __func__, resume_file);
++#endif
+ 	pr_debug("PM: Checking hibernation image partition %s\n", resume_file);
+ 
+ 	if (resume_delay) {
+@@ -801,13 +973,33 @@ static int software_resume(void)
+ 	}
+ 
+  Check_image:
++#if 1	/* WR ADD */
++	error = platform_composite(1);
++	if ( error ){
++		printk(KERN_ERR "++%s: platform_composite Erros\n", __func__);
++	}
++#endif	/* WR ADD */
++
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Hibernation image partition %d:%d present\n", __func__, MAJOR(swsusp_resume_device), MINOR(swsusp_resume_device));
++#endif
+ 	pr_debug("PM: Hibernation image partition %d:%d present\n",
+ 		MAJOR(swsusp_resume_device), MINOR(swsusp_resume_device));
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Looking for hibernation image.\n", __func__);
++#endif
+ 	pr_debug("PM: Looking for hibernation image.\n");
+ 	error = swsusp_check();
+ 	if (error)
++#ifdef	HIBERNATE_TRACE
++	{
++		printk(KERN_ERR "++%s: swsusp_check error.\n", __func__);
+ 		goto Unlock;
++	}
++#else
++		goto Unlock;
++#endif
+ 
+ 	/* The snapshot device should not be opened while we're running */
+ 	if (!atomic_add_unless(&snapshot_device_available, -1, 0)) {
+@@ -825,6 +1017,9 @@ static int software_resume(void)
+ 	if (error)
+ 		goto close_finish;
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Preparing processes for restore.\n",__func__);
++#endif
+ 	pr_debug("PM: Preparing processes for restore.\n");
+ 	error = freeze_processes();
+ 	if (error) {
+@@ -832,12 +1027,23 @@ static int software_resume(void)
+ 		goto Done;
+ 	}
+ 
++#ifdef	HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Loading hibernation image.\n",__func__);
++#endif
+ 	pr_debug("PM: Loading hibernation image.\n");
+ 
+ 	error = swsusp_read(&flags);
+ 	swsusp_close(FMODE_READ);
+ 	if (!error)
++#ifdef	HIBERNATE_TRACE
++	{
++		printk(KERN_ERR "++%s: hibernation_restore Start(0x%x)\n",__func__, flags & SF_PLATFORM_MODE);
++		hibernation_restore(flags & SF_PLATFORM_MODE);
++		printk(KERN_ERR "++%s: hibernation_restore End\n",__func__);
++	}
++#else
+ 		hibernation_restore(flags & SF_PLATFORM_MODE);
++#endif
+ 
+ 	printk(KERN_ERR "PM: Failed to load hibernation image, recovering.\n");
+ 	swsusp_free();
+@@ -860,6 +1066,79 @@ close_finish:
+ 
+ late_initcall(software_resume);
+ 
++#ifdef	CONFIG_ARCH_MB86S70
++static  const struct of_device_id set_panbug[] ={
++        {
++                .name = "set_panbug",
++        },
++};
++
++static int __init atag_parse(void)
++{
++	struct device_node      *node;
++	struct property *pp;
++	const char *startup;
++	const char *enckey;
++	int	len;
++#ifdef  HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Start\n",__func__);
++#endif
++	node = of_find_matching_node(NULL, set_panbug);
++	if ( node ) {
++		pp = of_find_property(node, "start-up",NULL);
++		if(pp != NULL){
++			startup = of_get_property(node, "start-up", NULL);
++			memset(resume_file, 0, 255);
++			len = strlen(startup);
++			if ( len > 0 && len <=255 ){
++				/* hibernation run */
++				strncpy( resume_file, startup, len );
++				resume_delay=3;				// Check
++			}
++		} else {
++			printk(KERN_ERR "atag_parse(start-up) error\n");
++		}
++		pp = of_find_property(node, "enc-key",NULL);
++		if(pp != NULL){
++			enckey = of_get_property(node, "enc-key", NULL);
++		} else {
++			printk(KERN_ERR "atag_parse(enc-key) error\n");
++		}
++		of_node_put(node);
++	} else {
++		printk(KERN_ERR "atag_parse(set_panbug) error\n");
++	}
++//#ifdef  HIBERNATE_TRACE
++#if 1	/* for debug */
++printk(KERN_ERR "++%s:\n",__func__);
++printk(KERN_ERR "++%s: End(startup=%s enckey=%s resume_delay=%d)\n",__func__, resume_file, enckey, resume_delay);
++printk(KERN_ERR "++%s:\n",__func__);
++#endif
++	return 0;
++}
++subsys_initcall(atag_parse);
++
++int is_hibernation_flag(void)
++{
++	return hibernation_flag;
++}
++EXPORT_SYMBOL_GPL(is_hibernation_flag);
++
++int is_suspend_bypass(void)
++{
++	if ( hibernation_flag == 2 )
++		return 1;
++	else
++		return 0;
++}
++EXPORT_SYMBOL_GPL(is_suspend_bypass);
++
++void suspend_set(void)
++{
++	hibernation_startup = 2;
++}
++EXPORT_SYMBOL_GPL(suspend_set);
++#endif
+ 
+ static const char * const hibernation_modes[] = {
+ 	[HIBERNATION_PLATFORM]	= "platform",
+@@ -987,6 +1266,9 @@ static ssize_t resume_store(struct kobject *kobj, struct kobj_attribute *attr,
+ 	unsigned int maj, min;
+ 	dev_t res;
+ 	int ret = -EINVAL;
++#ifdef  HIBERNATE_TRACE
++printk(KERN_ERR "++%s: Start.\n",__func__);
++#endif
+ 
+ 	if (sscanf(buf, "%u:%u", &maj, &min) != 2)
+ 		goto out;
+@@ -1051,11 +1333,34 @@ static ssize_t reserved_size_store(struct kobject *kobj,
+ 
+ power_attr(reserved_size);
+ 
++#ifdef	CONFIG_ARCH_MB86S70	/* WR add */
++static ssize_t startup_show(struct kobject *kobj,
++				  struct kobj_attribute *attr, char *buf)
++{
++	if ( hibernation_startup == 1 )
++		return sprintf(buf, "%s\n", "hibernate");
++	else if ( hibernation_startup == 2 )
++		return sprintf(buf, "%s\n", "suspend");
++	else 
++		return sprintf(buf, "%s\n", "poweron");
++}
++static ssize_t startup_store(struct kobject *kobj,
++				   struct kobj_attribute *attr,
++				   const char *buf, size_t n)
++{
++	return 0;
++}
++power_attr(startup);
++#endif	/* CONFIG_ARCH_MB86S70  */
++
+ static struct attribute * g[] = {
+ 	&disk_attr.attr,
+ 	&resume_attr.attr,
+ 	&image_size_attr.attr,
+ 	&reserved_size_attr.attr,
++#ifdef	CONFIG_ARCH_MB86S70	/* WR add*/
++	&startup_attr.attr,
++#endif	/* CONFIG_ARCH_MB86S70 */
+ 	NULL,
+ };
+ 
+@@ -1078,7 +1383,10 @@ static int __init resume_setup(char *str)
+ 	if (noresume)
+ 		return 1;
+ 
++#ifdef	CONFIG_ARCH_MB86S70
++#else
+ 	strncpy( resume_file, str, 255 );
++#endif
+ 	return 1;
+ }
+ 
+@@ -1118,7 +1426,10 @@ static int __init resumewait_setup(char *str)
+ 
+ static int __init resumedelay_setup(char *str)
+ {
++#ifdef	CONFIG_ARCH_MB86S70
++#else
+ 	resume_delay = simple_strtoul(str, NULL, 0);
++#endif
+ 	return 1;
+ }
+ 
+diff --git a/kernel/power/suspend.c b/kernel/power/suspend.c
+index bed0489..b8465ce 100644
+--- a/kernel/power/suspend.c
++++ b/kernel/power/suspend.c
+@@ -30,6 +30,8 @@
+ 
+ #include "power.h"
+ 
++#undef SUSPEND_TRACE
++
+ struct pm_sleep_state pm_states[PM_SUSPEND_MAX] = {
+ 	[PM_SUSPEND_FREEZE] = { .label = "freeze", .state = PM_SUSPEND_FREEZE },
+ 	[PM_SUSPEND_STANDBY] = { .label = "standby", },
+@@ -321,6 +323,9 @@ static int enter_state(suspend_state_t state)
+ {
+ 	int error;
+ 
++#ifdef  SUSPEND_TRACE
++        printk(KERN_ERR "++%s: Start\n",__func__);
++#endif
+ 	if (state == PM_SUSPEND_FREEZE) {
+ #ifdef CONFIG_PM_DEBUG
+ 		if (pm_test_level != TEST_NONE && pm_test_level <= TEST_CPUS) {
+@@ -352,7 +357,13 @@ static int enter_state(suspend_state_t state)
+ 
+ 	pr_debug("PM: Entering %s sleep\n", pm_states[state].label);
+ 	pm_restrict_gfp_mask();
++#ifdef  SUSPEND_TRACE
++        printk(KERN_ERR "++%s: suspend_devices_and_enter start\n",__func__);
++#endif
+ 	error = suspend_devices_and_enter(state);
++#ifdef  SUSPEND_TRACE
++        printk(KERN_ERR "++%s: suspend_devices_and_enter end\n",__func__);
++#endif
+ 	pm_restore_gfp_mask();
+ 
+  Finish:
+@@ -360,6 +371,12 @@ static int enter_state(suspend_state_t state)
+ 	suspend_finish();
+  Unlock:
+ 	mutex_unlock(&pm_mutex);
++#ifdef  SUSPEND_TRACE
++        printk(KERN_ERR "++%s: End\n",__func__);
++#endif
++#ifdef	CONFIG_ARCH_MB86S70
++	suspend_set();
++#endif
+ 	return error;
+ }
+ 
+@@ -386,11 +403,20 @@ int pm_suspend(suspend_state_t state)
+ {
+ 	int error;
+ 
++#ifdef	SUSPEND_TRACE
++	printk(KERN_ERR "++%s: Start\n",__func__);
++#endif
+ 	if (state <= PM_SUSPEND_ON || state >= PM_SUSPEND_MAX)
+ 		return -EINVAL;
+ 
+ 	pm_suspend_marker("entry");
++#ifdef	SUSPEND_TRACE
++	printk(KERN_ERR "++%s: enter_state Start\n",__func__);
++#endif
+ 	error = enter_state(state);
++#ifdef	SUSPEND_TRACE
++	printk(KERN_ERR "++%s: enter_state End\n",__func__);
++#endif
+ 	if (error) {
+ 		suspend_stats.fail++;
+ 		dpm_save_failed_errno(error);
+@@ -398,6 +424,9 @@ int pm_suspend(suspend_state_t state)
+ 		suspend_stats.success++;
+ 	}
+ 	pm_suspend_marker("exit");
++#ifdef	SUSPEND_TRACE
++	printk(KERN_ERR "++%s: End\n",__func__);
++#endif
+ 	return error;
+ }
+ EXPORT_SYMBOL(pm_suspend);
+diff --git a/kernel/power/swap.c b/kernel/power/swap.c
+index 7c33ed2..20a41e7 100644
+--- a/kernel/power/swap.c
++++ b/kernel/power/swap.c
+@@ -30,11 +30,14 @@
+ #include <linux/atomic.h>
+ #include <linux/kthread.h>
+ #include <linux/crc32.h>
++#include <linux/crypto.h>
+ 
+ #include "power.h"
+ 
+ #define HIBERNATE_SIG	"S1SUSPEND"
+ 
++#define	LZO_ENC
++#undef	SWAP_TRACE
+ /*
+  *	The swap map is a data structure used for keeping track of each page
+  *	written to a swap partition.  It consists of many swap_map_page
+@@ -51,6 +54,34 @@
+ 
+ #define MAP_PAGE_ENTRIES	(PAGE_SIZE / sizeof(sector_t) - 1)
+ 
++#ifdef	LZO_ENC
++unsigned char key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
++int klen = 16;
++//static inline void sg_set_buf(struct scatterlist *sg, void *buf, unsigned int buflen)
++//{
++//	sg->page = virt_to_page(buf);
++//	sg->offset = offset_in_page(buf);
++//	sg->length = buflen;
++//}
++static int lzo_enc_init(void)
++{
++	struct crypto_tfm*	tfm;
++	int			ret=0;
++
++//	tfm = crypto_alloc_tfm("aes", 0);
++//	if (!tfm)
++//		return -ENOMEM;
++//
++//	ret = crypto_cipher_setkey(tfm, key, klen);
++//	if (ret) 
++//		goto out;
++//
++//out:
++//	crypto_free_tfm(tfm);
++	return ret;
++
++}
++#endif
+ /*
+  * Number of free pages that are not high.
+  */
+@@ -230,8 +261,12 @@ static int mark_swapfiles(struct swap_map_handle *handle, unsigned int flags)
+ 		swsusp_header->flags = flags;
+ 		if (flags & SF_CRC32_MODE)
+ 			swsusp_header->crc32 = handle->crc32;
++#if 0  /* WR signature write off */
++		error = 0;
++#else
+ 		error = hib_bio_write_page(swsusp_resume_block,
+ 					swsusp_header, NULL);
++#endif
+ 	} else {
+ 		printk(KERN_ERR "PM: Swap header not found!\n");
+ 		error = -ENODEV;
+@@ -588,6 +623,9 @@ static int save_image_lzo(struct swap_map_handle *handle,
+ 	struct cmp_data *data = NULL;
+ 	struct crc_data *crc = NULL;
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: Start\n",__func__);
++#endif
+ 	/*
+ 	 * We'll limit the number of threads for compression to limit memory
+ 	 * footprint.
+@@ -779,6 +817,9 @@ out_clean:
+ 	}
+ 	if (page) free_page((unsigned long)page);
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: End\n",__func__);
++#endif
+ 	return ret;
+ }
+ 
+@@ -818,6 +859,9 @@ int swsusp_write(unsigned int flags)
+ 	unsigned long pages;
+ 	int error;
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: Start\n",__func__);
++#endif
+ 	pages = snapshot_get_image_size();
+ 	error = get_swap_writer(&handle);
+ 	if (error) {
+@@ -848,6 +892,9 @@ int swsusp_write(unsigned int flags)
+ 	}
+ out_finish:
+ 	error = swap_writer_finish(&handle, flags, error);
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: End\n",__func__);
++#endif
+ 	return error;
+ }
+ 
+@@ -1079,6 +1126,9 @@ static int load_image_lzo(struct swap_map_handle *handle,
+ 	struct dec_data *data = NULL;
+ 	struct crc_data *crc = NULL;
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: Start\n",__func__);
++#endif
+ 	/*
+ 	 * We'll limit the number of threads for decompression to limit memory
+ 	 * footprint.
+@@ -1376,6 +1426,9 @@ out_clean:
+ 	}
+ 	if (page) vfree(page);
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: End\n",__func__);
++#endif
+ 	return ret;
+ }
+ 
+@@ -1392,6 +1445,9 @@ int swsusp_read(unsigned int *flags_p)
+ 	struct snapshot_handle snapshot;
+ 	struct swsusp_info *header;
+ 
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: Start\n",__func__);
++#endif
+ 	memset(&snapshot, 0, sizeof(struct snapshot_handle));
+ 	error = snapshot_write_next(&snapshot);
+ 	if (error < PAGE_SIZE)
+@@ -1413,6 +1469,9 @@ end:
+ 		pr_debug("PM: Image successfully loaded\n");
+ 	else
+ 		pr_debug("PM: Error %d resuming\n", error);
++#ifdef  SWAP_TRACE
++printk(KERN_ERR "**%s: End\n",__func__);
++#endif
+ 	return error;
+ }
+ 
+-- 
+1.7.9.5
+

@@ -1,0 +1,1143 @@
+From ce44824bc366bc3ad650124d956f31413356ab28 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:27 +0900
+Subject: [PATCH 25/29] P29_0027-sni-fixall-201511_patch_No1_rebase
+
+
+diff --git a/arch/arm/boot/dts/mb86s72.dtsi b/arch/arm/boot/dts/mb86s72.dtsi
+index f8c43c8..a4e4556 100644
+--- a/arch/arm/boot/dts/mb86s72.dtsi
++++ b/arch/arm/boot/dts/mb86s72.dtsi
+@@ -38,23 +38,6 @@
+ 				};
+ 			};
+ 		};
+-#if 0 /* Disable Cortex-A7 */
+-		cluster1: cluster@1 {
+-			reg = <1>;
+-			freqs = <825000000>;
+-			cores {
+-				#address-cells = <1>;
+-				#size-cells = <0>;
+-				core2: core@0 {
+-					reg = <0>;
+-				};
+-
+-				core3: core@1 {
+-					reg = <1>;
+-				};
+-			};
+-		};
+-#endif
+ 	};
+ 
+ 	cpus {
+@@ -90,37 +73,6 @@
+ 			>;
+ 			clock-latency = <100000>;
+ 		};
+-#if 0 /* Disable Cortex-A7 */
+-		cpu2: cpu@2 {
+-			device_type = "cpu";
+-			compatible = "arm,cortex-a7";
+-			reg = <0x100>;
+-			cluster = <&cluster1>;
+-			core = <&core2>;
+-			clock-frequency = <825000000>;
+-			cci-control-port = <&cci_control3>;
+-			operating-points = <
+-				/* kHz    uV */
+-				 825000  1020000
+-			>;
+-			clock-latency = <100000>;
+-		};
+-
+-		cpu3: cpu@3 {
+-			device_type = "cpu";
+-			compatible = "arm,cortex-a7";
+-			reg = <0x101>;
+-			cluster = <&cluster1>;
+-			core = <&core3>;
+-			clock-frequency = <825000000>;
+-			cci-control-port = <&cci_control3>;
+-			operating-points = <
+-				/* kHz    uV */
+-				 825000  1020000
+-			>;
+-			clock-latency = <100000>;
+-		};
+-#endif
+ 	};
+ 
+ 	scb_sensor: scb_sensor {
+@@ -128,8 +80,6 @@
+ 		#thermal-sensor-cells = <1>;
+ 		ca15-cpu0-id = <0>;
+ 		ca15-cpu1-id = <1>;
+-		ca7-cpu0-id = <2>;
+-		ca7-cpu1-id = <3>;
+ 	};
+ 
+ 	thermal-zones {
+@@ -146,21 +96,6 @@
+ 			thermal-sensors = <&scb_sensor 0x1>;
+ 
+ 		};
+-#if 0 /* Disable Cortex-A7 */
+-		ca7-cpu0-thermal {
+-			polling-delay-passive = <500>;
+-			polling-delay = <1000>;
+-			thermal-sensors = <&scb_sensor 0x100>;
+-
+-		};
+-
+-		ca7-cpu1-thermal {
+-			polling-delay-passive = <500>;
+-			polling-delay = <1000>;
+-			thermal-sensors = <&scb_sensor 0x101>;
+-
+-		};
+-#endif
+ 	};
+ 
+ 	cci@2c090000 {
+@@ -874,18 +809,6 @@
+ 			cpuif-id = <1>;
+ 			cpu = <&cpu1>;
+ 		};
+-#if 0 /* Disable Cortex-A7 */
+-		gic-cpuif@2 {
+-			compatible = "arm,gic-cpuif";
+-			cpuif-id = <0x100>;
+-			cpu = <&cpu2>;
+-		};
+-		gic-cpuif@3 {
+-			compatible = "arm,gic-cpuif";
+-			cpuif-id = <0x101>;
+-			cpu = <&cpu3>;
+-		};
+-#endif
+ 
+ 	};
+ 
+@@ -897,15 +820,6 @@
+ 		power-domains = <&power 7>;	/* PCR3 Chnage 3->7 */
+ 
+ 	};
+-#if 0 /* Disable Cortex-A7 */
+-	pmu_a7 {
+-		compatible = "arm,cortex-a7-pmu";
+-		cluster  = <&cluster1>;
+-		interrupts = <0 18 4>,
+-			     <0 22 4>;
+-		power-domains = <&power 3>;
+-	};
+-#endif
+ 
+ 	ipcu@31a00000 {
+ 		#clock-cells = <1>;
+@@ -1381,7 +1295,7 @@
+ 		#size-cells = <1>;
+ 		id = <2>;
+ 		ranges;
+-		reg = <0 0x33E00600 0x64>, <0 0x33E00168 0x4>, <0 0x33F00000 0x60>;
++		reg = <0 0x33E00600 0x64>, <0 0x33E00168 0x4>;
+ 		clock_num = <0>;
+ 		#stream-id-cells = <2>;
+ 		iova-start = <0x00000000>;
+@@ -1428,7 +1342,7 @@
+ 		#size-cells = <1>;
+ 		id = <1>;
+ 		ranges;
+-		reg = <0 0x33E00100 0x64>,<0 0 0>, <0 0x33F00000 0x60>;
++		reg = <0 0x33E00100 0x64>,<0 0 0>;
+ 		clocks = <&clk_alw_e_3>;
+ 		clock-names = "pcie1_pclk_X4";
+ 		clock_num = <1>;
+@@ -1477,7 +1391,7 @@
+ 		#size-cells = <1>;
+ 		id = <0>;
+ 		ranges;
+-		reg = <0 0x33E00000 0x64>,<0 0 0>, <0 0x33F00000 0x60>;
++		reg = <0 0x33E00000 0x64>,<0 0 0>;
+ 		clocks = <&clk_alw_e_2>;
+ 		clock-names = "pcie0_pclk";
+ 		clock_num = <1>;
+diff --git a/arch/arm/mach-mb86s70/mcpm.c b/arch/arm/mach-mb86s70/mcpm.c
+index dd1abb7..c88be03 100644
+--- a/arch/arm/mach-mb86s70/mcpm.c
++++ b/arch/arm/mach-mb86s70/mcpm.c
+@@ -28,6 +28,8 @@
+ #include <linux/interrupt.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/platform_device.h>
++#include <linux/cpu.h>
++#include <linux/syscore_ops.h>
+ 
+ #include <asm/mcpm.h>
+ #include <asm/proc-fns.h>
+@@ -38,6 +40,7 @@
+ #include <asm/system_misc.h>
+ #include <asm/suspend.h>
+ #include <asm/idmap.h>
++#include <asm/smp_plat.h>
+ 
+ #include <linux/arm-cci.h>
+ #include <linux/mailbox_controller.h>
+@@ -156,7 +159,7 @@ static void mb86s70_pm_suspend(u64 suspend)
+ 
+ 	__mcpm_cpu_going_down(cpu, cluster);
+ 
+-	local_irq_disable();
++	BUG_ON(!irqs_disabled());
+ 	arch_spin_lock(&mb86s70_pm_lock);
+ 	BUG_ON(__mcpm_cluster_state(cluster) != CLUSTER_UP);
+ 
+@@ -187,8 +190,9 @@ static void mb86s70_pm_suspend(u64 suspend)
+ 		gic_cpu_if_down();
+ 
+ 	if (last_man && __mcpm_outbound_enter_critical(cpu, cluster)) {
++
+ 		arch_spin_unlock(&mb86s70_pm_lock);
+-		local_irq_enable();
++
+ 
+ 		v7_exit_coherency_flush(all);
+ 
+@@ -197,7 +201,6 @@ static void mb86s70_pm_suspend(u64 suspend)
+ 		__mcpm_outbound_leave_critical(cluster, CLUSTER_DOWN);
+ 	} else {
+ 		arch_spin_unlock(&mb86s70_pm_lock);
+-		local_irq_enable();
+ 		v7_exit_coherency_flush(louis);
+ 	}
+ 
+@@ -205,9 +208,12 @@ static void mb86s70_pm_suspend(u64 suspend)
+ 
+ 	/* Now we are prepared for power-down, do it: */
+ 	if (!skip_wfi) {
++
+ 		mb86s70_set_wficolor(cluster, cpu, AT_WFI_DO_POWEROFF);
++		while (1) {
+ 		wfi();
+ 	}
++	}
+ 
+ 	/* Not dead at this point?  Let our caller cope. */
+ }
+@@ -227,18 +233,104 @@ extern void cci_port_control(unsigned int port, int enable);
+ extern void mb86s70_pm_power_up_setup(unsigned int affinity_level);
+ extern void mb86s70_reboot(u32 delay);
+ 
++static int mb86s70_die(unsigned long arg);
++
++/*
++ * Wait until all other cpus than myself shut-down using MHU call.
++ *
++ * Must be called with irqs disabled.
++ */
++static void mb86s70_wait_nonboot_cpus_off(void)
++{
++
++	int cpu;
++	int this_cpu = smp_processor_id();
++
++	BUG_ON(! irqs_disabled());
++
++	for_each_present_cpu(cpu) {
++
++		unsigned int mpidr, cpu_id, cluster_id;
++
++		unsigned long timeout = 100;
++
++		if (cpu == this_cpu)
++			continue;
++
++		mpidr = cpu_logical_map(cpu);
++		cluster_id = MPIDR_AFFINITY_LEVEL(mpidr, 1);;
++		cpu_id = MPIDR_AFFINITY_LEVEL(mpidr, 0);
++
++		while (timeout-- > 0) {
++			struct cmd_cpu_control_gate cmd;
++			struct completion got_rsp;
++			int ret;
++
++			cmd.payload_size = sizeof(cmd);
++			cmd.cluster_class = 0;
++			cmd.cluster_id = cluster_id;
++			cmd.cpu_id = cpu_id;
++		
++			init_completion(&got_rsp);
++	
++			ret = mhu_send_packet(CMD_CPU_CLOCK_GATE_GET_REQ,
++								  &cmd, sizeof(cmd), &got_rsp);
++	
++			if (ret < 0) {
++				pr_err("%s:%d failed!\n", __func__, __LINE__);
++				break;
++			}
++
++			if (ret)
++				wait_for_completion(&got_rsp);
++	
++			if (cmd.cpu_state == SCB_CPU_STATE_OFF) {
++				break;
++			}
++
++			mdelay(10);
++		}
++
++		if (timeout == 0) {
++			pr_err("%s:%d failed!\n", __func__, __LINE__);
++		}
++
++	}
++
++}
++
+ void mb86s70_restart(char mode, const char *unused)
+ {
++
+ 	pr_err("%s\n", __func__);
++
++	BUG_ON(irqs_disabled());
++
++	local_irq_disable();
++
++	mb86s70_wait_nonboot_cpus_off();
++
+ 	/* Reboot immediately */
+ 	mb86s70_reboot(50);
++
++	mb86s70_die(0);
+ }
+ 
+ static void mb86s70_poweroff(void)
+ {
++
+ 	pr_err("%s\n", __func__);
++
++	BUG_ON(irqs_disabled());
++
++	local_irq_disable();
++
++	mb86s70_wait_nonboot_cpus_off();
++
+ 	/* Reboot never, remain dead */
+ 	mb86s70_reboot(~0);
++
++	mb86s70_die(0);
+ }
+ 
+ static int mb86s70_pm_valid(suspend_state_t state)
+@@ -255,11 +347,15 @@ static int mb86s70_die(unsigned long arg)
+ 	unsigned int cluster = MPIDR_AFFINITY_LEVEL(mpidr, 1);
+ 	unsigned int cpu = MPIDR_AFFINITY_LEVEL(mpidr, 0);
+ 	phys_reset_t phys_reset;
++
++	BUG_ON(!irqs_disabled());
++
+ 	mcpm_set_entry_vector(cpu, cluster, cpu_resume);
+ 
+ 	setup_mm_for_reboot();
+ 
+ 	if (use_retention_mode) {
++
+ 		__mcpm_cpu_going_down(cpu, cluster);
+ 		arch_spin_lock(&mb86s70_pm_lock);
+ 		gic_cpu_if_down();
+@@ -325,6 +421,8 @@ static int mb86s70_pm_enter(suspend_state_t state)
+ 	cpu = MPIDR_AFFINITY_LEVEL(mpidr, 0);
+ 	cluster = MPIDR_AFFINITY_LEVEL(mpidr, 1);
+ 
++	mb86s70_wait_nonboot_cpus_off();
++
+ 	switch (state) {
+ 	case PM_SUSPEND_STANDBY:
+ 		pr_err("STANDBY\n");
+@@ -371,6 +469,26 @@ static const struct platform_suspend_ops mb86s70_pm_ops = {
+ 	.enter		= mb86s70_pm_enter,
+ };
+ 
++static int mb86s70_shutdown(struct notifier_block *this,
++							unsigned long code, void *x)
++{
++
++	int err;
++
++	pr_err("%s\n", __func__);
++
++	err = disable_nonboot_cpus();
++	if (err) {
++		pr_err("Failed to shut down nonboot cpus");
++	}
++
++	return NOTIFY_DONE;
++}
++	
++static struct notifier_block mb86s70_reboot_notifier = {
++	.notifier_call  = mb86s70_shutdown,
++};
++
+ void set_secondary_entry(unsigned long secondary_entry);
+ 
+ static int __init mb86s70_mcpm_init(void)
+@@ -432,6 +550,8 @@ static int __init mb86s70_mcpm_init(void)
+ 			       version_cmd.version, version_cmd.config_version);
+ 	}
+ 
++	register_reboot_notifier(&mb86s70_reboot_notifier);
++
+ 	return ret;
+ }
+ early_initcall(mb86s70_mcpm_init);
+diff --git a/arch/arm/mach-mb86s70/pm_domains.c b/arch/arm/mach-mb86s70/pm_domains.c
+index 761db24..4717b69 100644
+--- a/arch/arm/mach-mb86s70/pm_domains.c
++++ b/arch/arm/mach-mb86s70/pm_domains.c
+@@ -84,6 +84,17 @@ static int mb86s7x_pd_power_off(struct generic_pm_domain *domain)
+ 	return mb86s7x_pd_power(domain, false);
+ }
+ 
++static bool mb86s7x_pd_active_wakeup(struct device *dev)
++{
++	bool (*active_wakeup)(struct device *dev);
++	bool result;
++
++	active_wakeup = dev_gpd_data(dev)->ops.active_wakeup;
++	result = active_wakeup ? active_wakeup(dev) : device_may_wakeup(dev);
++
++	return result;
++}
++
+ static struct genpd_onecell_data mb86s7x_pd;
+ 
+ static int mb86s7x_add_sub_domain(struct device_node *master,
+@@ -200,6 +211,9 @@ static __init int mb86s7x_pm_init_power_domain(void)
+ 		}
+ 
+ 		pm_genpd_init(&pd->pd, NULL, !cmd.state);
++
++		pd->pd.dev_ops.active_wakeup = mb86s7x_pd_active_wakeup;
++		
+ 		platform_set_drvdata(child_pdev, pd);
+ 
+ 		pr_debug("power domain %s starting.\n", child->name);
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 3f69046..a96f9e0 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -2,6 +2,7 @@
+ #include <linux/io.h>
+ #include <linux/slab.h>
+ #include <linux/list.h>
++#include <linux/mutex.h>
+ #include <linux/module.h>
+ #include <linux/mailbox.h>
+ #include <linux/spinlock.h>
+@@ -42,6 +43,8 @@ static struct completion fsm_rsp;
+ static void *mhu_chan;
+ static int do_xfer(void);
+ 
++static DEFINE_MUTEX(mhu_mutex);
++
+ static enum {
+ 	MHU_PARK = 0,
+ 	MHU_WRR, /* Waiting to get Remote's Reply */
+@@ -279,6 +282,11 @@ static int do_xfer(void)
+ 			return 0;
+ 		}
+ 
++		if (ax != NULL) {
++			spin_unlock_irqrestore(&fsm_lock, flags);
++			return 1;
++		}
++
+ 		if (fsm_state == MHU_PARK) {
+ 			_ch = mhu_chan;
+ 			mhu_chan = NULL;
+@@ -326,7 +334,7 @@ static int do_xfer(void)
+ 		mhu_chan = ipc_request_channel(&mhu_cl);
+ 	}
+ 
+-	if (mhu_chan) {
++	if (mhu_chan && (!irqs_disabled())) {
+ 		int ret;
+ 
+ 		init_completion(&fsm_rsp);
+@@ -432,6 +440,8 @@ int mhu_hndlr_set(u32 cmd, mhu_handler_t hndlr)
+ 	unsigned long flags;
+ 	int ret = -EINVAL;
+ 
++	mutex_lock(&mhu_mutex);
++
+ 	spin_lock_irqsave(&fsm_lock, flags);
+ 	if (cmd < MHU_NUM_CMDS && !handler[cmd]) {
+ 		ret = 0;
+@@ -450,6 +460,8 @@ int mhu_hndlr_set(u32 cmd, mhu_handler_t hndlr)
+ 			mhu_chan = _ch;
+ 	}
+ 
++	mutex_unlock(&mhu_mutex);
++
+ 	return ret;
+ }
+ EXPORT_SYMBOL_GPL(mhu_hndlr_set);
+@@ -458,6 +470,8 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ {
+ 	unsigned long flags;
+ 
++	mutex_lock(&mhu_mutex);
++
+ 	spin_lock_irqsave(&fsm_lock, flags);
+ 
+ 	if (cmd < MHU_NUM_CMDS && handler[cmd] == hndlr)
+@@ -471,6 +485,7 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ 		/* Don't free channel if any user is listening */
+ 		if (cmd != MHU_NUM_CMDS) {
+ 			spin_unlock_irqrestore(&fsm_lock, flags);
++			mutex_unlock(&mhu_mutex);
+ 			return;
+ 		}
+ 
+@@ -487,6 +502,9 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ 		return;
+ 	}
+ 	spin_unlock_irqrestore(&fsm_lock, flags);
++
++	mutex_unlock(&mhu_mutex);
++
+ }
+ EXPORT_SYMBOL_GPL(mhu_hndlr_clr);
+ 
+@@ -494,15 +512,18 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ {
+ 	struct mhu_xfer *x;
+ 	unsigned long flags;
++	int ret;
+ 
+ 	if (code & ~0xff) {
+ 		WARN_ON(1);
+ 		return -EINVAL;
+ 	}
+ 
++	mutex_lock(&mhu_mutex);
+ 	if ((code & RESP_BIT) &&
+ 		fsm_state != MHU_WRRL && fsm_state != MHU_WRL) {
+ 		WARN_ON(1);
++		mutex_unlock(&mhu_mutex);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -511,6 +532,7 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 	if (list_empty(&free_xfers) && mhu_alloc_xfers(5, &free_xfers)) {
+ 		spin_unlock_irqrestore(&fsm_lock, flags);
+ 		mbox_dbg("%s:%d OOM\n", __func__, __LINE__);
++		mutex_unlock(&mhu_mutex);
+ 		return -EAGAIN;
+ 	}
+ 
+@@ -527,7 +549,11 @@ int mhu_send_packet(int code, void *buf, int len, struct completion *c)
+ 
+ 	spin_unlock_irqrestore(&fsm_lock, flags);
+ 
+-	return do_xfer();
++	ret = do_xfer();
++
++	mutex_unlock(&mhu_mutex);
++
++	return ret;
+ }
+ EXPORT_SYMBOL_GPL(mhu_send_packet);
+ 
+diff --git a/drivers/pci/host/pcie_f_pcie2_dme.c b/drivers/pci/host/pcie_f_pcie2_dme.c
+index 7ebe86d..f99380f 100644
+--- a/drivers/pci/host/pcie_f_pcie2_dme.c
++++ b/drivers/pci/host/pcie_f_pcie2_dme.c
+@@ -28,6 +28,7 @@
+ #include <linux/msi.h>
+ #include <linux/iommu.h>
+ #include "pcie_f_pcie2_dme.h"
++#include <linux/spinlock.h>
+ 
+ #define PCIE_TRANS_STAT				0x844
+ #define PCIE_TRANS_STAT_DL_ACT			(1 << 6)
+@@ -232,7 +233,15 @@ u32 test_patten[TEST_NUM] = {
+ 	0x05050505
+ };
+ 
+-struct pcie_port pcie_port = {.rc_cnt = 0, .dme_pcie = NULL};
++struct pcie_port pcie_port = {
++	.rc_cnt = 0,
++	.dme_pcie = NULL,
++	.pcie_por_num = 0,
++	.pcie_por_num_total = 0,
++	.pcie_por_num_release = 0,
++};
++
++static DEFINE_SPINLOCK(pcie_older_lock);
+ 
+ 
+ void f_pcie_dev_set_platdata(struct device *dev, void *data)
+@@ -676,17 +685,19 @@ static int f_pcie_host_setup(int nr, struct pci_sys_data *sys)
+ 
+ 	for (port_num = 0; port_num < pcie_port.pcie_por_num; port_num++) {
+ 		dme_port = f_get_pcie_port(port_num);
+-		if (!dme_port->rc) {
++		if (!dme_port)
+ 			continue;
+-		}
++		if (!dme_port->rc)
++			continue;
++		
+ 		if (dme_port->rc->root_bus_nr < 0) {
+ 			pcie_port.nr_port_map[nr] = port_num;
+ 			break;
+ 		}
+ 	}
+ 
+-	if (!dme_port->rc) {
+-		pr_err("%s %d : dme_port->rc is NULL\n", __func__, __LINE__);
++	if (!dme_port || !dme_port->rc) {
++		pr_err("%s %d:dme_port or rc is NULL\n", __func__, __LINE__);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -1679,8 +1690,8 @@ static int f_pcie_pm_suspend(struct device *dev)
+ 		return 0;
+ 	}
+ 
+-	if (dme_port->rc) {
+ 		/* rc mode */
++	if (dme_port->rc) {
+ 		rc = dme_port->rc;
+ 		for (clk_id = 0; clk_id < rc->clk_num; clk_id++)
+ 			clk_disable_unprepare(rc->clk[clk_id]);
+@@ -1697,7 +1708,7 @@ static int f_pcie_pm_resume(struct device *dev)
+ {
+ 	struct f_pcie_port *dme_port;
+ 	struct dme_rc *rc;
+-	struct dme_ep *ep;
++	struct dme_ep *ep = NULL;
+ 	u32 i = 0, clk_id, dma_irq_cnt;
+ 
+ 	dme_port = dev_get_platdata(dev);
+@@ -1710,6 +1721,9 @@ static int f_pcie_pm_resume(struct device *dev)
+ 	}
+ 
+ 	/* ep mode */
++	if (dme_port->ep && dme_port->ep->inited)
++		return 0;
++
+ 	if (dme_port->ep && !dme_port->ep->inited) {
+ 		ep = dme_port->ep;
+ 
+@@ -1740,6 +1754,7 @@ static int f_pcie_pm_resume(struct device *dev)
+ 	}
+ 
+ 	/* rc mode */
++	if (dme_port->rc) {
+ 	rc = dme_port->rc;
+ 
+ 	if (dme_port->wrapper) {
+@@ -1763,6 +1778,7 @@ static int f_pcie_pm_resume(struct device *dev)
+ 		if (rc->lig_irq)
+ 			enable_irq(rc->lig_irq);
+ 	}
++	}
+ 
+ 	return 0;
+ }
+@@ -1917,8 +1933,8 @@ static int f_pcie_host_probe(struct platform_device *pdev,
+ 	}
+ 
+ 	if (rc->msi_lig) {
+-		rc->lig_irq = of_irq_to_resource(rc->dev->of_node, PCIE_WAP_LIG_INT,
+-			NULL);
++		rc->lig_irq = of_irq_to_resource(rc->dev->of_node,
++			PCIE_WAP_LIG_INT, NULL);
+ 		if (rc->lig_irq > 0) {
+ 			err = request_irq(rc->lig_irq, f_pcie_lig_int,
+ 				IRQF_TRIGGER_RISING, "PCIe LIG", rc);
+@@ -2095,7 +2111,8 @@ static int f_pcie_ep_probe(struct platform_device *pdev,
+ 			err = request_irq(pdme_ep->dma_irq[j],
+ 					f_pcie_ep_interrupt,
+ 					IRQF_TRIGGER_RISING,
+-					"PCIe Endpoint DMA IRQ", (struct dme_ep *)pdme_ep);
++					"PCIe Endpoint DMA IRQ",
++					(struct dme_ep *)pdme_ep);
+ 			if (err) {
+ 				dev_err(&pdev->dev, "request_irq err\n");
+ 				goto err_unmap_regs;
+@@ -2113,6 +2130,7 @@ static int f_pcie_ep_probe(struct platform_device *pdev,
+ 
+ 	pdme_ep->inited = 1;
+ 	f_pcie_dev_set_platdata(&pdev->dev, dme_port);
++
+ 	return 0;
+ 
+ err_unmap_regs:
+@@ -2130,10 +2148,9 @@ err_fail:
+ 
+ int pcie_init(void)
+ {
+-	struct dme_ep *pdme_ep;
+ 	struct f_pcie_port *dme_port;
+ 	int err = 0, port_num = 0;
+-	char devname[EP_NAME_LEN];
++	char *devname = NULL;
+ 
+ 	f_pcie_host_dme_pci_ops.nr_controllers = pcie_port.rc_cnt;
+ 	pci_common_init(&f_pcie_host_dme_pci_ops);
+@@ -2146,13 +2163,21 @@ int pcie_init(void)
+ 		}
+ 
+ 		if (dme_port->ep && dme_port->ep->loop_coned) {
+-			pdme_ep = dme_port->ep;
++			
++			devname = kmalloc((sizeof(char) * EP_NAME_LEN),
++			    GFP_KERNEL);
++			if (!devname) {
++				pr_err("%s devname is NULL\n", __func__);
++				return -ENOMEM;;
++			}
+ 			snprintf(devname, EP_NAME_LEN, "%s-ep",
+ 				dev_name(dme_port->ep->dev));
+ 			f_pcie_ep_driver.name = devname;
+ 			err = pci_register_driver(&f_pcie_ep_driver);
+-			if (err < 0)
+-				dev_err(pdme_ep->dev, "pci_register_driver err!\n");
++			if (err < 0) {
++				dev_err(dme_port->ep->dev, "pci_register_driver err\n");
++				kfree(f_pcie_ep_driver.name);
++			}
+ 		} else {
+ 			if (dme_port->ep)
+ 				dev_info(dme_port->ep->dev, "no loop cable!\n");
+@@ -2175,8 +2200,10 @@ void pcie_uninit(void)
+ 			continue;
+ 		}
+ 
+-		if (dme_port->ep && dme_port->ep->loop_coned)
++		if (dme_port->ep && dme_port->ep->loop_coned) {
+ 			pci_unregister_driver(&f_pcie_ep_driver);
++			kfree(f_pcie_ep_driver.name);
++		}
+ 
+ 		kfree(pcie_port.dme_pcie[port_num].ep);
+ 		kfree(pcie_port.dme_pcie[port_num].rc);
+@@ -2189,13 +2216,15 @@ void pcie_uninit(void)
+ 	kfree(pcie_port.nr_port_map);
+ 	pcie_port.dme_pcie = NULL;
+ 	pcie_port.pcie_por_num = 0;
++	pcie_port.pcie_por_num_release = 0;
++	pcie_port.pcie_por_num_total = 0;
+ 	pcie_port.rc_cnt = 0;
+ }
+ 
+ static int f_pcie_probe(struct platform_device *pdev)
+ {
+ 	struct resource wrap;
+-	struct f_pcie_port *dme_port;
++	struct f_pcie_port *dme_port = NULL;
+ 	struct pcie_pro *sysoc_pcie;
+ 	struct device_node *np_pm, *dev_np;
+ 	struct device *dev = &pdev->dev;
+@@ -2210,24 +2239,31 @@ static int f_pcie_probe(struct platform_device *pdev)
+ 	if (!sysoc_pcie)
+ 		return -EINVAL;
+ 
+-	pcie_port.pcie_por_num++;
++	spin_lock_irqsave(&pcie_older_lock, flags);
+ 	dev_np = pdev->dev.of_node;
+ 	index = sysoc_pcie->id;
++	spin_unlock_irqrestore(&pcie_older_lock, flags);
++
+ 	dme_port = pcie_port.dme_pcie;
+ 	if (!dme_port) {
+ 		size = sizeof(struct f_pcie_port) * (index + 1);
+ 		dme_port = kmalloc(size, GFP_KERNEL);
+-		if (!dme_port)
+-			goto fail2;
++		if (!dme_port) {
++			dev_err(dev, "dme_port is null\n");
++			goto fail3;
++		}
+ 
+ 		size = sizeof(u32) * (index + 1);
+ 		pcie_port.nr_port_map = kmalloc(size, GFP_KERNEL);
+-		if (!pcie_port.nr_port_map)
++		if (!pcie_port.nr_port_map) {
++			dev_err(dev, "pcie_port.nr_port_map is null\n");
+ 			goto fail2;
+-
++		}
+ 		pcie_port.dme_pcie = dme_port;
+ 		INIT_LIST_HEAD(&pcie_port.list);
+ 		spin_lock_init(&pcie_port.lock);
++		pcie_port.pcie_por_num_total = index + 1;
++		pcie_port.pcie_por_num_release = index + 1;
+ 	}
+ 
+ 	dme_port->pcie_type = sysoc_pcie->pcie_type;
+@@ -2251,7 +2287,9 @@ static int f_pcie_probe(struct platform_device *pdev)
+ 
+ 	spin_lock_irqsave(&pcie_port.lock, flags);
+ 	list_add_tail(&dme_port[index].ports, &pcie_port.list);
++	pcie_port.pcie_por_num++;
+ 	spin_unlock_irqrestore(&pcie_port.lock, flags);
++
+ 	if (dme_port->pcie_type) {
+ 		struct dme_rc *rc;
+ 
+@@ -2285,6 +2323,7 @@ static int f_pcie_probe(struct platform_device *pdev)
+ 		dme_port[index].ep->loop_coned = sysoc_pcie->loop_coned;
+ 		dme_port[index].ep->dev = &pdev->dev;
+ 		dme_port[index].rc = NULL;
++
+ 		r = f_pcie_ep_probe(pdev, pdev->dev.of_node, index);
+ 		if (r < 0) {
+ 			dev_err(dev, "f_pcie_ep_probe fail\n");
+@@ -2300,7 +2339,8 @@ static int f_pcie_probe(struct platform_device *pdev)
+ 		if (r)
+ 			dev_err(dev, "pm_genpd_add_callbacks fail\n");
+ 	}
+-	if (dme_port[index].index == 0)
++	
++	if (pcie_port.pcie_por_num_total == pcie_port.pcie_por_num)
+ 		pcie_init();
+ 
+ 	return 0;
+@@ -2311,11 +2351,18 @@ fail1:
+ 	if (dme_port[index].wrapper)
+ 		iounmap(dme_port[index].wrapper);
+ 
++	if (pcie_port.dme_pcie[index].rc)
+ 	kfree(pcie_port.dme_pcie[index].rc);
++
++	if (pcie_port.dme_pcie[index].ep)
+ 	kfree(pcie_port.dme_pcie[index].ep);
+ 
+ fail2:
+-	return 0;
++	if (dme_port)
++		kfree(dme_port);
++
++fail3:
++	return -ENOMEM;
+ }
+ 
+ static int f_pcie_remove(struct platform_device *pdev)
+@@ -2338,6 +2385,7 @@ static int f_pcie_remove(struct platform_device *pdev)
+ 
+ 	if (!dme_port->rc && !dme_port->ep) {
+ 		dev_err(dev, "f_pcie_port is fail\n");
++		dev_err(dev, "dme_port index %d\n", dme_port->index);
+ 		return -EINVAL;
+ 	}
+ 
+@@ -2419,12 +2467,13 @@ static int f_pcie_remove(struct platform_device *pdev)
+ 			if (r)
+ 				dev_err(dev, "pm_genpd_remove fail\n");
+ 		}
+-		pdev->dev.platform_data = NULL;
+ 		pm_runtime_put_sync(&pdev->dev);
+ 		pm_runtime_disable(&pdev->dev);
++		pdev->dev.platform_data = NULL;
+ 	}
+ 
+-	if (dme_port->index == (pcie_port.pcie_por_num - 1))
++	pcie_port.pcie_por_num_release--;
++	if (pcie_port.pcie_por_num_release == 0)
+ 		pcie_uninit();
+ 
+ 	return 0;
+diff --git a/drivers/pci/host/pcie_f_pcie2_dme.h b/drivers/pci/host/pcie_f_pcie2_dme.h
+index 73a20e6..a126f3a 100644
+--- a/drivers/pci/host/pcie_f_pcie2_dme.h
++++ b/drivers/pci/host/pcie_f_pcie2_dme.h
+@@ -59,7 +59,10 @@ struct pcie_port {
+ 	struct f_pcie_port *dme_pcie;
+ 	u32 *nr_port_map;
+ 	u32 pcie_por_num;
++	u32 pcie_por_num_release;
++	u32 pcie_por_num_total;
+ 	u32 rc_cnt;
++	int total_rc_cnt;
+ 	spinlock_t lock; /* */
+ };
+ 
+diff --git a/drivers/pci/host/sysoc_pcie.c b/drivers/pci/host/sysoc_pcie.c
+index c394a31..b5703d7 100644
+--- a/drivers/pci/host/sysoc_pcie.c
++++ b/drivers/pci/host/sysoc_pcie.c
+@@ -44,7 +44,6 @@ struct sysoc {
+ 	struct clk **clk;
+ 	void __iomem *sysoc_reg;
+ 	void __iomem *bifurc_reg;
+-	void __iomem *gpv_reg;
+ 	u32 pm_cap;
+ 	u32 clk_num;
+ 	const char *phy_reset;
+@@ -53,7 +52,6 @@ struct sysoc {
+ static LIST_HEAD(port_list);
+ /* for link list */
+ spinlock_t port_lock;
+-struct sysoc *_sysoc;
+ 
+ struct sysoc *find_sysoc(struct device *dev)
+ {
+@@ -152,40 +150,23 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 	const char *clk_nam[10] = {0};
+ 	struct pcie_pro *port;
+ 	unsigned long flags;
+-	int ret = 0, phy_reset_sz, err;
+-	u32 clk_num, clk_id = 0, gpv, id;
++	int ret = 0, phy_reset_sz, err, clk_id = 0;
++	u32 clk_num, id;
++	struct sysoc *_sysoc;
+ 
+ 	spin_lock_init(&port_lock);
+ 	_sysoc = kzalloc(sizeof(*_sysoc), GFP_KERNEL);
++	if (!_sysoc) {
++		dev_err(&pdev->dev, "kzalloc _sysoc fail\n");
++		return -EINVAL;
++	}
+ 	_sysoc->dev = &pdev->dev;
+ 	_sysoc->node = *dev->of_node;
+ 
+ 	ret = of_property_read_u32_index(node, "id", 0, &id);
+ 	if (ret) {
+ 		dev_err(dev, "Missing id in dt\n");
+-		return -EINVAL;
+-	}
+-
+-	if (!of_address_to_resource(node, 2, &res)) {
+-		_sysoc->gpv_reg = ioremap(res.start, resource_size(&res));
+-
+-		switch (id) {
+-		case 0:
+-			gpv = 0x01 | readl(_sysoc->gpv_reg + PCIE0_RGS0);
+-			writel(gpv, _sysoc->gpv_reg + PCIE0_RGS0);
+-		break;
+-
+-		case 1:
+-			gpv = 0x01 | readl(_sysoc->gpv_reg + PCIE1_RGS0);
+-			writel(gpv, _sysoc->gpv_reg + PCIE1_RGS0);
+-		break;
+-
+-		case 2:
+-			gpv = 0x01 | readl(_sysoc->gpv_reg + PCIE1_RGS1);
+-			writel(gpv, _sysoc->gpv_reg + PCIE1_RGS1);
+-		break;
+-
+-		}
++		goto err0;
+ 	}
+ 
+ 	/* check Bifurcation enable or not */
+@@ -204,7 +185,13 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 		clk_num = 0;
+ 
+ 	if (clk_num) {
+-		_sysoc->clk = kmalloc(clk_num * sizeof(struct clk *), GFP_KERNEL);
++		_sysoc->clk = kmalloc(clk_num * sizeof(struct clk *),
++			GFP_KERNEL);
++		if(!_sysoc->clk){
++			dev_err(dev, "%s %d:_sysoc->clk NULL\n",
++				__func__, __LINE__);
++			goto err0;
++		}
+ 		memset(_sysoc->clk, 0, clk_num * sizeof(struct clk *));
+ 	}
+ 	_sysoc->clk_num = clk_num;
+@@ -220,13 +207,15 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 
+ 		if (IS_ERR(_sysoc->clk[clk_id])) {
+ 			dev_err(_sysoc->dev, "clock%d not found.\n", clk_id);
+-			return -ENXIO;
++			clk_id--;
++			goto err1;
+ 		}
+ 
+ 		err = clk_prepare_enable(_sysoc->clk[clk_id]);
+ 		if (err) {
++			clk_id--;
+ 			dev_err(_sysoc->dev, "clk (%d) enable fail.\n", clk_id);
+-			return -ENXIO;
++			goto err1;
+ 		}
+ 
+ 		clk_id++;
+@@ -236,13 +225,13 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 
+ 	if (of_address_to_resource(node, 0, &res)) {
+ 		dev_err(&pdev->dev, "no regs resource defined\n");
+-		return -ENXIO;
++		goto err1;
+ 	}
+ 
+ 	_sysoc->sysoc_reg = ioremap(res.start, resource_size(&res));
+ 	if (!_sysoc->sysoc_reg) {
+ 		dev_err(dev, "sysoc_reg fail\n");
+-		return -ENXIO;
++		goto err1;
+ 	}
+ 
+ #ifdef CONFIG_PM_RUNTIME
+@@ -251,9 +240,10 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ #endif
+ 
+ 	_sysoc->port = kmalloc(sizeof(*_sysoc->port), GFP_KERNEL);
+-	if (!_sysoc->port)
+-		return -ENXIO;
+-
++	if (!_sysoc->port) {
++		dev_err(dev, "_sysoc->port fail\n");
++		goto err2;
++	}
+ 	port = _sysoc->port;
+ 
+ 	/* assert phy reset */
+@@ -267,11 +257,9 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 		writel(PCIE_PHY_RST_DIS, _sysoc->sysoc_reg + PCIE_PHY_RST);
+ 		usleep_range(10, 20);
+ 	}
+-
+ 	port->pcie_type = readl(_sysoc->sysoc_reg) & SYSOC_PCIE_TYPE;
+ 	port->loop_coned = readl(_sysoc->sysoc_reg) & SYSOC_GRGMX_SAT;
+ 	port->id = id;
+-
+ 	dev_set_drvdata(dev, port);
+ 
+ 	_sysoc->pm_cap = 0;
+@@ -279,10 +267,11 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 	if (np_pm) {
+ 		_sysoc->pm_cap = 1;
+ 		ret = pm_genpd_add_callbacks(dev, &gpd_dev_ops, NULL);
+-		if (ret)
++		if (ret) {
+ 			dev_err(dev, "pm_genpd_add_callbacks fail\n");
++			goto err3;
++		}
+ 	}
+-
+ #ifdef CONFIG_ARM_DMA_USE_IOMMU
+ 	if (!port->pcie_type && port->loop_coned) {
+ 		if (dev->archdata.mapping) {
+@@ -292,18 +281,42 @@ static int sysoc_pcie_probe(struct platform_device *pdev)
+ 		}
+ 	}
+ #endif
+-
+ 	spin_lock_irqsave(&port_lock, flags);
+ 	list_add(&_sysoc->ports, &port_list);
+ 	spin_unlock_irqrestore(&port_lock, flags);
+-
+ 	if (node) {
+ 		ret = of_platform_populate(node, NULL, NULL, dev);
+-		if (ret)
++		if (ret) {
+ 			dev_err(dev, "failed to add pcie core\n");
++			goto err3;
++		}
+ 	}
+-
+ 	return 0;
++err3:
++	if (_sysoc->port)
++		kfree(_sysoc->port);
++err2:
++	if (_sysoc->sysoc_reg)
++		iounmap(_sysoc->sysoc_reg);
++
++err1:
++	while (_sysoc->clk_num && clk_id >= 0) {
++		if (_sysoc->clk[clk_id])
++			clk_disable_unprepare(_sysoc->clk[clk_id]);
++		clk_id--;
++	};
++
++	if (_sysoc->clk_num && _sysoc->clk)
++		kfree(_sysoc->clk);
++
++err0:
++	if (_sysoc->bifurc_reg)
++		iounmap(_sysoc->bifurc_reg);
++
++	if (_sysoc)
++		kfree(_sysoc);
++
++	return -EINVAL;
+ }
+ 
+ static int sysoc_pcie_remove_child(struct device *dev, void *unused)
+@@ -320,6 +333,8 @@ static int sysoc_pcie_remove(struct platform_device *pdev)
+ 	int r = 0;
+ 	struct sysoc *pcie_sysoc;
+ 
++	device_for_each_child(&pdev->dev, NULL, sysoc_pcie_remove_child);
++	
+ 	pcie_sysoc = find_sysoc(&pdev->dev);
+ 	if (!pcie_sysoc)
+ 		return 0;
+@@ -336,18 +351,14 @@ static int sysoc_pcie_remove(struct platform_device *pdev)
+ 	if (pcie_sysoc->bifurc_reg)
+ 		iounmap(pcie_sysoc->bifurc_reg);
+ 
+-	if (pcie_sysoc->gpv_reg)
+-		iounmap(pcie_sysoc->gpv_reg);
++	pm_runtime_put_sync(&pdev->dev);
++	pm_runtime_disable(&pdev->dev);
+ 
+-	pcie_sysoc->sysoc_reg = NULL;
+-	pcie_sysoc->bifurc_reg = NULL;
+ 	list_del(&pcie_sysoc->ports);
+ 
++	kfree(pcie_sysoc->clk);
+ 	kfree(pcie_sysoc->port);
+ 	kfree(pcie_sysoc);
+-	device_for_each_child(&pdev->dev, NULL, sysoc_pcie_remove_child);
+-	pm_runtime_put_sync(&pdev->dev);
+-	pm_runtime_disable(&pdev->dev);
+ 
+ 	return 0;
+ }
+diff --git a/drivers/tty/serial/amba-pl011.c b/drivers/tty/serial/amba-pl011.c
+index ed9b095..d8e3f57 100755
+--- a/drivers/tty/serial/amba-pl011.c
++++ b/drivers/tty/serial/amba-pl011.c
+@@ -2175,7 +2175,7 @@ static struct uart_driver amba_reg = {
+ 
+ int pl011_pm_start(struct device *dev)
+ {
+-	struct uart_amba_port *uap;
++	struct uart_amba_port *uap = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(amba_ports); i++) {
+@@ -2197,7 +2197,7 @@ int pl011_pm_start(struct device *dev)
+ 
+ int pl011_pm_stop(struct device *dev)
+ {
+-	struct uart_amba_port *uap;
++	struct uart_amba_port *uap = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(amba_ports); i++) {
+diff --git a/drivers/usb/host/f_usb20ho_hcd.c b/drivers/usb/host/f_usb20ho_hcd.c
+index 5bf714b..b9ce062 100644
+--- a/drivers/usb/host/f_usb20ho_hcd.c
++++ b/drivers/usb/host/f_usb20ho_hcd.c
+@@ -236,6 +236,8 @@ static int f_usb20ho_hcd_probe(struct platform_device *pdev)
+ 		goto err_unregister_ehci_dev;
+ 	}
+ 
++	device_set_wakeup_capable(&pdev->dev, 1);
++
+ 	dev_dbg(&pdev->dev, "%s() is ended.\n", __func__);
+ 	return 0;
+ 
+-- 
+1.7.1
+

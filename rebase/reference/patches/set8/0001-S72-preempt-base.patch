@@ -1,0 +1,190 @@
+From 54668f5eb560a6d7dfad008a5c77f35dcc54062b Mon Sep 17 00:00:00 2001
+From: wrlinux6012 <wrlinux6012@tok-svnsvr2.corp.ad.wrs.com>
+Date: Thu, 25 Feb 2016 17:26:14 +0900
+Subject: [PATCH 2/4] PT_P2_0001-S72-preempt-base_rebase
+
+
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index e72f634..0b2b3f9 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -585,6 +589,20 @@ config SI570
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called si570
+ 
++config FUJITSU_MEDIA_SHELL
++	tristate "Support for Fujitsu Media IPs"
++	depends on ARCH_MB86S70
++	default n
++
++config GPIO_REVISION
++	tristate "Make board revision from gpio pullups and pulldowns"
++	default n
++	depends on GPIOLIB
++	help
++	  Makes available in the kernel a board revision index which is
++	  collected from sensing gpios listed in Device Tree.  Other drivers
++	  can enable or disable quirks at runtime based on the information.
++
+ source "drivers/misc/c2port/Kconfig"
+ source "drivers/misc/eeprom/Kconfig"
+ source "drivers/misc/cb710/Kconfig"
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index 9edcb6f..afb06b1 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -56,3 +57,5 @@ obj-$(CONFIG_VMWARE_VMCI)	+= vmw_vmci/
+ obj-$(CONFIG_LATTICE_ECP3_CONFIG)	+= lattice-ecp3-config.o
+ obj-$(CONFIG_SRAM)		+= sram.o
+ obj-$(CONFIG_HWLAT_DETECTOR)	+= hwlat_detector.o
++obj-$(CONFIG_FUJITSU_MEDIA_SHELL)	+= f_media-shell.o
++obj-$(CONFIG_GPIO_REVISION)	+= gpio-revision.o
+diff --git a/include/linux/completion.h b/include/linux/completion.h
+index e197dcd..df4929b 100644
+--- a/include/linux/completion.h
++++ b/include/linux/completion.h
+@@ -76,6 +76,18 @@ static inline void init_completion(struct completion *x)
+ 	init_swait_head(&x->wait);
+ }
+ 
++/**
++ * reinit_completion - reinitialize a completion structure
++ * @x:  pointer to completion structure that is to be reinitialized
++ *
++ * This inline function should be used to reinitialize a completion structure so it can
++ * be reused. This is especially important after complete_all() is used.
++ */
++static inline void reinit_completion(struct completion *x)
++{
++	x->done = 0;
++}
++
+ extern void wait_for_completion(struct completion *);
+ extern void wait_for_completion_io(struct completion *);
+ extern int wait_for_completion_interruptible(struct completion *x);
+diff --git a/init/Kconfig b/init/Kconfig
+index 55ea154..c2d3d0b 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -604,7 +604,7 @@ config TREE_RCU_TRACE
+ config RCU_BOOST
+ 	bool "Enable RCU priority boosting"
+ 	depends on RT_MUTEXES && PREEMPT_RCU
+-	default y if PREEMPT_RT_FULL
++	default n
+ 	help
+ 	  This option boosts the priority of preempted RCU readers that
+ 	  block the current preemptible RCU grace period for too long.
+@@ -1252,6 +1252,12 @@ config HOTPLUG
+ config HAVE_PCSPKR_PLATFORM
+ 	bool
+ 
++config PANIC_TIMEOUT
++	int "Default panic timeout"
++	default 0
++	help
++	  Set default panic timeout.
++
+ menuconfig EXPERT
+ 	bool "Configure standard kernel features (expert users)"
+ 	# Unhide debug options, to make the on-by-default options visible
+diff --git a/kernel/panic.c b/kernel/panic.c
+index 90b6690..86cffc2 100644
+--- a/kernel/panic.c
++++ b/kernel/panic.c
+@@ -26,13 +26,19 @@
+ #define PANIC_TIMER_STEP 100
+ #define PANIC_BLINK_SPD 18
+
++/* Machine specific panic information string */
++char *mach_panic_string;
++
+ int panic_on_oops = CONFIG_PANIC_ON_OOPS_VALUE;
+ static unsigned long tainted_mask;
+ static int pause_on_oops;
+ static int pause_on_oops_flag;
+ static DEFINE_SPINLOCK(pause_on_oops_lock);
+
+-int panic_timeout;
++#ifndef CONFIG_PANIC_TIMEOUT
++#define CONFIG_PANIC_TIMEOUT 0
++#endif
++int panic_timeout = CONFIG_PANIC_TIMEOUT;
+ EXPORT_SYMBOL_GPL(panic_timeout);
+
+ ATOMIC_NOTIFIER_HEAD(panic_notifier_list);
+@@ -377,6 +383,11 @@ late_initcall(init_oops_id);
+ void print_oops_end_marker(void)
+ {
+ 	init_oops_id();
++
++	if (mach_panic_string)
++		printk(KERN_WARNING "Board Information: %s\n",
++		       mach_panic_string);
++
+ 	printk(KERN_WARNING "---[ end trace %016llx ]---\n",
+ 		(unsigned long long)oops_id);
+ }
+diff --git a/kernel/power/suspend.c b/kernel/power/suspend.c
+index 320ac1d..bed0489 100644
+--- a/kernel/power/suspend.c
++++ b/kernel/power/suspend.c
+@@ -25,6 +25,7 @@
+ #include <linux/suspend.h>
+ #include <linux/syscore_ops.h>
+ #include <linux/ftrace.h>
++#include <linux/rtc.h>
+ #include <trace/events/power.h>
+ 
+ #include "power.h"
+@@ -362,6 +363,18 @@ static int enter_state(suspend_state_t state)
+ 	return error;
+ }
+ 
++static void pm_suspend_marker(char *annotation)
++{
++	struct timespec ts;
++	struct rtc_time tm;
++
++	getnstimeofday(&ts);
++	rtc_time_to_tm(ts.tv_sec, &tm);
++	pr_info("PM: suspend %s %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
++		annotation, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
++		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
++}
++
+ /**
+  * pm_suspend - Externally visible function for suspending the system.
+  * @state: System sleep state to enter.
+@@ -376,6 +389,7 @@ int pm_suspend(suspend_state_t state)
+ 	if (state <= PM_SUSPEND_ON || state >= PM_SUSPEND_MAX)
+ 		return -EINVAL;
+ 
++	pm_suspend_marker("entry");
+ 	error = enter_state(state);
+ 	if (error) {
+ 		suspend_stats.fail++;
+@@ -383,6 +397,7 @@ int pm_suspend(suspend_state_t state)
+ 	} else {
+ 		suspend_stats.success++;
+ 	}
++	pm_suspend_marker("exit");
+ 	return error;
+ }
+ EXPORT_SYMBOL(pm_suspend);
+diff --git a/net/Kconfig b/net/Kconfig
+index 2ddc904..2a680da 100644
+--- a/net/Kconfig
++++ b/net/Kconfig
+@@ -220,7 +234,7 @@ source "net/vmw_vsock/Kconfig"
+ source "net/netlink/Kconfig"
+ 
+ config RPS
+-	boolean
++	boolean "RPS"
+ 	depends on SMP && SYSFS && USE_GENERIC_SMP_HELPERS
+ 	default y
+ 
+-- 
+1.7.1
+

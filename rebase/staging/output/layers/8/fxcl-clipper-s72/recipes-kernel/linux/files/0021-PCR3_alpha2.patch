@@ -1,0 +1,79 @@
+From 70cb56b22f1c40be5fff38994da4eddda5a7322b Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:31 +0000
+Subject: [PATCH 15/34] 0021-PCR3_alpha2
+
+
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index 3638cb6..0e9157a 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -321,12 +321,33 @@ static int do_xfer(void)
+ 
+ 		init_completion(&fsm_rsp);
+ 		/* Send via generic api */
++#if 1	/* PCR3 Retry add */
++{
++		int i;
++		for ( i=0; i<3; i++ ) {
++			ret = ipc_send_message(mhu_chan, (void *)code);
++			if ( ret )
++				break;
++		}
++		if ( i != 0 ){
++			if ( i == 3 ) {
++				pr_err("%s:%d CMD_%d Send Failed\n",
++						__func__, __LINE__, code);
++				BUG();
++			} else {
++				pr_err("%s:%d CMD_%d Send Failed Retry%d\n",
++						__func__, __LINE__, code, i);
++			}
++		}
++}
++#else
+ 		ret = ipc_send_message(mhu_chan, (void *)code);
+ 		if (!ret) {
+ 			pr_err("%s:%d CMD_%d Send Failed\n",
+ 					__func__, __LINE__, code);
+ 			BUG();
+ 		}
++#endif
+ 		if (!(code & RESP_BIT)) {
+ 			ret = wait_for_completion_timeout(&fsm_rsp,
+ 						msecs_to_jiffies(1000));
+diff --git a/drivers/gpio/gpio-mb86s7x.c b/drivers/gpio/gpio-mb86s7x.c
+index 536365e..e6584d3 100644
+--- a/drivers/gpio/gpio-mb86s7x.c
++++ b/drivers/gpio/gpio-mb86s7x.c
+@@ -65,6 +65,12 @@ static int mb86s70_gpio_request(struct gpio_chip *gc, unsigned gpio)
+ 	spin_lock_irqsave(&gchip->lock, flags);
+ 
+ 	val = readl(gchip->base + PFR(gpio));
++#if 1	/* PCR3 no gpio pin */
++	if ( val & (1 << (gpio%8)) ) {
++		spin_unlock_irqrestore(&gchip->lock, flags);
++		return -1;
++	}
++#endif
+ 	val &= ~OFFSET(gpio);
+ 	writel(val, gchip->base + PFR(gpio));
+ 
+diff --git a/drivers/i2c/busses/i2c-f_i2c.c b/drivers/i2c/busses/i2c-f_i2c.c
+index dad4ee4..2fde60a 100644
+--- a/drivers/i2c/busses/i2c-f_i2c.c
++++ b/drivers/i2c/busses/i2c-f_i2c.c
+@@ -688,6 +688,10 @@ static int f_i2c_resume(struct device *dev)
+ 
+ 	i2c_unlock_adapter(&i2c->adapter);
+ 
++#if 1	/* PCR3 add */
++	f_i2c_hw_reset(i2c);
++	f_i2c_hw_init(i2c);
++#endif
+ 	return ret;
+ }
+ 
+-- 
+1.7.9.5
+

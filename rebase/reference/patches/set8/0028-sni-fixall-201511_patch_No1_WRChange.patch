@@ -1,0 +1,63 @@
+From 5f390d11fdbb13fcc34e363a6e72e615b2350f80 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:27 +0900
+Subject: [PATCH 26/29] P30_0028-sni-fixall-201511_patch_No1_WRChange_rebase
+
+
+diff --git a/arch/arm/mach-mb86s70/scb_mhu.c b/arch/arm/mach-mb86s70/scb_mhu.c
+index a96f9e0..5507938 100644
+--- a/arch/arm/mach-mb86s70/scb_mhu.c
++++ b/arch/arm/mach-mb86s70/scb_mhu.c
+@@ -440,7 +440,9 @@ int mhu_hndlr_set(u32 cmd, mhu_handler_t hndlr)
+ 	unsigned long flags;
+ 	int ret = -EINVAL;
+ 
++#if 0  /* WR Del */
+ 	mutex_lock(&mhu_mutex);
++#endif
+ 
+ 	spin_lock_irqsave(&fsm_lock, flags);
+ 	if (cmd < MHU_NUM_CMDS && !handler[cmd]) {
+@@ -460,7 +462,9 @@ int mhu_hndlr_set(u32 cmd, mhu_handler_t hndlr)
+ 			mhu_chan = _ch;
+ 	}
+ 
++#if 0  /* WR Del */
+ 	mutex_unlock(&mhu_mutex);
++#endif
+ 
+ 	return ret;
+ }
+@@ -470,7 +474,9 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ {
+ 	unsigned long flags;
+ 
++#if 0  /* WR Del */
+ 	mutex_lock(&mhu_mutex);
++#endif
+ 
+ 	spin_lock_irqsave(&fsm_lock, flags);
+ 
+@@ -485,7 +491,9 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ 		/* Don't free channel if any user is listening */
+ 		if (cmd != MHU_NUM_CMDS) {
+ 			spin_unlock_irqrestore(&fsm_lock, flags);
++#if 0  /* WR Del */
+ 			mutex_unlock(&mhu_mutex);
++#endif
+ 			return;
+ 		}
+ 
+@@ -503,7 +511,9 @@ void mhu_hndlr_clr(u32 cmd, mhu_handler_t hndlr)
+ 	}
+ 	spin_unlock_irqrestore(&fsm_lock, flags);
+ 
++#if 0  /* WR Del */
+ 	mutex_unlock(&mhu_mutex);
++#endif
+ 
+ }
+ EXPORT_SYMBOL_GPL(mhu_hndlr_clr);
+-- 
+1.7.1
+

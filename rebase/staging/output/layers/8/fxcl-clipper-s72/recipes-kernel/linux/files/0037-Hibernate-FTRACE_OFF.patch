@@ -1,0 +1,33 @@
+From 2ccd2dac12dee9e0553ed64e9d475e69742a4130 Mon Sep 17 00:00:00 2001
+From: jthomas <jacob.thomas@windriver.com>
+Date: Thu, 16 Feb 2017 14:03:46 +0000
+Subject: [PATCH 31/34] 0037-Hibernate-FTRACE_OFF
+
+
+diff --git a/kernel/power/hibernate.c b/kernel/power/hibernate.c
+index c492c6e..a5afbbc 100644
+--- a/kernel/power/hibernate.c
++++ b/kernel/power/hibernate.c
+@@ -781,6 +781,9 @@ int hibernate(void)
+ #ifdef	HIBERNATE_TRACE
+ 	printk(KERN_ERR "++%s: Start\n",__func__);
+ #endif
++#ifdef	CONFIG_FTRACE
++	return 0;
++#endif	/* CONFIG_FTRACE */
+ 
+ 	lock_system_sleep();
+ 	/* The snapshot device should not be opened while we're running */
+@@ -890,6 +893,9 @@ static int software_resume(void)
+ #ifdef	HIBERNATE_TRACE
+ printk(KERN_ERR "++%s: Start(noresume=%d)\n",__func__,noresume);
+ #endif
++#ifdef	CONFIG_FTRACE
++	return 0;
++#endif	/* CONFIG_FTRACE */
+ #if 1	/* WR ADD */
+ 	error = platform_enc_setup(1);
+ 	if ( error ){
+-- 
+1.7.9.5
+

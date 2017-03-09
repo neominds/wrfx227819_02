@@ -1,0 +1,63 @@
+From b6d15b6b5a8484e4b5237752a9ab020adfe37931 Mon Sep 17 00:00:00 2001
+From: jayesh <jayesh.babu@windriver,com>
+Date: Tue, 8 Mar 2016 21:39:28 +0900
+Subject: [PATCH 27/29] P31_0029-MemoryTypeChange_FLAT_to_SPARSE_rebase
+
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index c1869bb..3107a99 100755
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1130,6 +1130,7 @@ source arch/arm/mm/Kconfig
+ config ARM_NR_BANKS
+ 	int
+ 	default 16 if ARCH_EP93XX
++	default 16 if ARCH_MB86S70_SPARSEMEMORY
+ 	default 8
+ 
+ config IWMMXT
+diff --git a/arch/arm/include/asm/sparsemem.h b/arch/arm/include/asm/sparsemem.h
+index 0009861..a6da462 100755
+--- a/arch/arm/include/asm/sparsemem.h
++++ b/arch/arm/include/asm/sparsemem.h
+@@ -18,7 +18,8 @@
+  * Define these in your mach/memory.h.
+  */
+ #if !defined(SECTION_SIZE_BITS) || !defined(MAX_PHYSMEM_BITS)
+-#error Sparsemem is not supported on this platform
++#define MAX_PHYSMEM_BITS       36
++#define SECTION_SIZE_BITS      28
+ #endif
+ 
+ #endif
+diff --git a/arch/arm/mach-mb86s70/Kconfig b/arch/arm/mach-mb86s70/Kconfig
+index 8488bf0..3235f5f 100755
+--- a/arch/arm/mach-mb86s70/Kconfig
++++ b/arch/arm/mach-mb86s70/Kconfig
+@@ -28,7 +28,21 @@ config ARCH_MB86S70
+ 	select PM_GENERIC_DOMAINS if PM
+ 	select LOCAL_TIMERS
+ 	select ARCH_DMA_ADDR_T_64BIT
+-	select ARCH_SELECT_MEMORY_MODEL
+-	select ARCH_SPARSEMEM_ENABLE
+ 	help
+ 	  Support for Fujitsu Semiconductor's systems.
++
++if ARCH_MB86S70
++choice
++	prompt "Memory Model"
++	default ARCH_MB86S70_FLATMEMORY
++
++config ARCH_MB86S70_FLATMEMORY
++	bool "Flat Memory"
++
++config ARCH_MB86S70_SPARSEMEMORY
++	bool "Sparse Memory"
++	select ARCH_SELECT_MEMORY_MODEL
++	select ARCH_SPARSEMEM_ENABLE
++
++endchoice
++endif
+-- 
+1.7.1
+
